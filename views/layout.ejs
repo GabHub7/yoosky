@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title><%= typeof pageTitle !== 'undefined' ? pageTitle + ' — ' : '' %><%= settings?.siteName || 'YOOSKY STORE' %></title>
+    <meta name="description" content="<%= settings?.about || 'YOOSKY STORE - Platform Digital Terpercaya' %>">
+    <meta name="theme-color" content="#050c26">
+    <link rel="icon" type="image/png" href="<%= settings?.logoUrl || '/uploads/logo-ys.png' %>">
+    <link rel="apple-touch-icon" href="<%= settings?.logoUrl || '/uploads/logo-ys.png' %>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js" defer></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>tailwind.config={theme:{extend:{fontFamily:{inter:['Inter','sans-serif']}}}}</script>
+    <style>
+        /* ═══════════════════════════════
+           YOOSKY STORE — Clean Minimal UI
+           ═══════════════════════════════ */
+        :root {
+            --bg-main:    #050c26;
+            --bg-section: #0a1540;
+            --bg-card:    #0d1a4a;
+            --bg-hover:   #111f5c;
+            --border:     rgba(37,99,235,0.18);
+            --border-md:  rgba(37,99,235,0.35);
+            --blue:       #2563eb;
+            --blue-dim:   rgba(37,99,235,0.15);
+            --blue-dark:  #1d4ed8;
+            --green:      #22c55e;
+            --green-dim:  rgba(34,197,94,0.12);
+            --red:        #ef4444;
+            --red-dim:    rgba(239,68,68,0.12);
+            --amber:      #f59e0b;
+            --text-1:     #EAF4FF;
+            --text-2:     #94a3b8;
+            --text-3:     #475569;
+            --brand-wa:   #25d366;
+        }
+
+        *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+        html {
+            height:100%;
+            width:100%;
+            max-width:100%;
+            overflow-x:hidden;
+            background:#050c26;
+        }
+        body {
+            font-family:'Inter',sans-serif;
+            background:#050c26;
+            color:var(--text-1);
+            min-height:100dvh;
+            width:100%;
+            max-width:100%;
+            position:relative;
+            -webkit-font-smoothing:antialiased;
+            overflow-x:hidden;
+        }
+        body.no-scroll { overflow:hidden; }
+
+        ::-webkit-scrollbar { width:4px; }
+        ::-webkit-scrollbar-track { background:#050c26; }
+        ::-webkit-scrollbar-thumb { background:#1e3a8a; border-radius:4px; }
+
+        @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
+        @keyframes slideUp  { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes slideRight { from{opacity:0;transform:translateX(100%)} to{opacity:1;transform:translateX(0)} }
+        @keyframes slideBottom { from{transform:translateY(100%)} to{transform:translateY(0)} }
+        @keyframes spin     { to{transform:rotate(360deg)} }
+        @keyframes marquee  { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+        @keyframes toastIn  { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+
+        .animate-spin   { animation:spin 1s linear infinite; }
+        .fade-in-up     { animation:slideUp .3s ease both; }
+
+        /* ── glass utility ── */
+        .glass {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+        .glass-strong {
+            background: var(--bg-card);
+            border: 1px solid var(--border-md);
+            border-radius: 12px;
+        }
+
+        /* ── Cards ── */
+        .card {
+            background:var(--bg-card);
+            border:1px solid var(--border);
+            border-radius:12px;
+        }
+        .card-hover {
+            transition:border-color .2s, background .2s;
+            cursor:pointer;
+        }
+        .card-hover:hover {
+            border-color:var(--border-md);
+            background:var(--bg-hover);
+        }
+        .card-hover:active { opacity:.85; }
+
+        /* ── Buttons ── */
+        .btn {
+            display:inline-flex; align-items:center; justify-content:center;
+            gap:6px; font-weight:600; font-size:13px;
+            border-radius:8px; cursor:pointer;
+            transition:opacity .15s, transform .1s;
+            border:none; text-decoration:none;
+        }
+        .btn:active { transform:scale(.97); }
+        .btn-primary {
+            background:var(--blue);
+            color:#fff;
+            padding:10px 18px;
+        }
+        .btn-primary:hover { opacity:.88; }
+        .btn-outline {
+            background:transparent;
+            border:1px solid var(--border-md);
+            color:var(--text-2);
+            padding:9px 16px;
+        }
+        .btn-outline:hover { border-color:var(--blue); color:var(--text-1); }
+        .btn-green  { background:var(--green); color:#fff; padding:10px 18px; }
+        .btn-green:hover { opacity:.88; }
+        .btn-red    { background:var(--red);   color:#fff; padding:10px 18px; }
+        .btn-red:hover   { opacity:.88; }
+        .btn-ghost {
+            background:rgba(255,255,255,.04);
+            border:1px solid var(--border);
+            color:var(--text-2);
+            padding:9px 14px;
+        }
+        .btn-ghost:hover { background:rgba(255,255,255,.07); }
+
+        /* ── Inputs ── */
+        .hm-input, .form-input {
+            width:100%; padding:10px 14px;
+            border-radius:8px;
+            background:rgba(255,255,255,.04);
+            border:1px solid var(--border-md);
+            color:var(--text-1); font-size:13px;
+            font-family:'Inter',sans-serif;
+            transition:border-color .15s;
+        }
+        .hm-input:focus, .form-input:focus {
+            outline:none;
+            border-color:rgba(59,130,246,.5);
+            background:rgba(59,130,246,.05);
+        }
+        .hm-input::placeholder, .form-input::placeholder { color:var(--text-3); }
+
+        /* ── Status badges ── */
+        .status-badge {
+            display:inline-flex; align-items:center; gap:4px;
+            padding:3px 10px; border-radius:6px;
+            font-size:10px; font-weight:700;
+            text-transform:uppercase; letter-spacing:.4px;
+        }
+        .status-pending  { background:rgba(245,158,11,.12); color:#fbbf24; border:1px solid rgba(245,158,11,.2); }
+        .status-done     { background:var(--green-dim);     color:#4ade80; border:1px solid rgba(34,197,94,.2); }
+        .status-cancelled{ background:var(--red-dim);       color:#f87171; border:1px solid rgba(239,68,68,.2); }
+
+        /* ── Product/game card ── */
+        .product-card { transition:border-color .2s, opacity .15s; }
+        .product-card:hover  { border-color:var(--border-md) !important; }
+        .product-card:active { opacity:.8; }
+
+        /* ── Scrollable rows ── */
+        .h-scroll {
+            display:flex; gap:10px;
+            overflow-x:auto; scroll-snap-type:x mandatory;
+            -webkit-overflow-scrolling:touch;
+            scrollbar-width:none; padding-bottom:4px;
+        }
+        .h-scroll::-webkit-scrollbar { display:none; }
+        .h-scroll-item { scroll-snap-align:start; flex-shrink:0; }
+
+        /* ── Filter pills ── */
+        .filter-pill {
+            padding:6px 14px; border-radius:20px;
+            border:1px solid var(--border);
+            background:transparent; color:var(--text-2);
+            font-size:12px; font-weight:500;
+            white-space:nowrap; cursor:pointer;
+            transition:all .15s;
+        }
+        .filter-pill.active, .filter-pill:hover {
+            background:var(--blue);
+            border-color:var(--blue);
+            color:#fff;
+        }
+        .filter-pill:active { opacity:.8; }
+
+        /* ── Section label ── */
+        .section-label {
+            font-size:11px; font-weight:700;
+            letter-spacing:.06em; text-transform:uppercase;
+            color:var(--text-3);
+        }
+
+        /* ── Marquee ── */
+        .marquee-track { animation:marquee 18s linear infinite; }
+
+        /* ── Modals ── */
+        .modal-overlay {
+            position:fixed; inset:0;
+            background:rgba(0,0,0,.75);
+            z-index:9000;
+            display:flex; align-items:flex-end;
+        }
+        .modal-sheet {
+            width:100%; background:var(--bg-card);
+            border-top:1px solid var(--border);
+            border-radius:20px 20px 0 0;
+            max-height:92dvh; overflow-y:auto;
+            animation:slideBottom .22s ease both;
+        }
+        .modal-sheet::-webkit-scrollbar { width:3px; }
+        .modal-sheet::-webkit-scrollbar-thumb { background:#1e3a8a; }
+
+        /* ── Side drawer ── */
+        .side-drawer {
+            position:absolute; right:0; top:0; bottom:0;
+            width:280px; background:var(--bg-card);
+            border-left:1px solid var(--border);
+            overflow-y:auto;
+            animation:slideRight .22s ease both;
+        }
+
+        /* ── Payment modal ── */
+        #paymentModal { position:fixed !important; z-index:99999 !important; }
+
+        /* ── Toast ── */
+        #toast-container {
+            position:fixed; bottom:20px;
+            left:12px; right:12px;
+            z-index:9500;
+            display:flex; flex-direction:column-reverse; gap:6px;
+            pointer-events:none;
+        }
+        #toast-container > * { pointer-events:auto; }
+        .toast {
+            display:flex; align-items:center; gap:10px;
+            padding:11px 14px; border-radius:10px;
+            border:1px solid var(--border-md);
+            background:var(--bg-hover);
+            font-size:12px; color:var(--text-1);
+            animation:toastIn .2s ease both;
+            max-width:100%;
+        }
+
+        /* ── Purchase notif ── */
+        #purchase-notif-container {
+            position:fixed; bottom:20px; left:12px;
+            z-index:9200;
+            display:flex; flex-direction:column; gap:8px;
+            pointer-events:none;
+        }
+        .purchase-notif {
+            display:flex; align-items:center; gap:10px;
+            padding:10px 14px; border-radius:12px;
+            background:var(--bg-hover);
+            border:1px solid var(--border-md);
+            animation:toastIn .3s ease both;
+            max-width:270px;
+        }
+        .purchase-notif-avatar {
+            width:34px; height:34px; border-radius:8px;
+            flex-shrink:0; overflow:hidden;
+            display:flex; align-items:center; justify-content:center;
+            font-weight:800; font-size:13px; color:#fff;
+        }
+        .purchase-notif-name  { font-size:11px; font-weight:700; color:var(--text-1); }
+        .purchase-notif-product { font-size:10px; color:var(--text-2); }
+        .purchase-notif-price { font-size:10px; font-weight:700; color:var(--green); white-space:nowrap; }
+
+        /* ── Avatar ── */
+        .avatar-wrap { position:relative; cursor:pointer; }
+        .avatar-wrap:hover .avatar-overlay { opacity:1; }
+        .avatar-overlay {
+            position:absolute; inset:0; border-radius:50%;
+            background:rgba(0,0,0,.5);
+            display:flex; align-items:center; justify-content:center;
+            opacity:0; transition:opacity .2s;
+        }
+
+        /* ── Profile photo ── */
+        .profile-photo-container {
+            width:56px; height:56px; border-radius:50%;
+            overflow:hidden; flex-shrink:0;
+            border:2px solid var(--border-md);
+        }
+        .profile-photo-container img { width:100%; height:100%; object-fit:cover; }
+        .profile-photo-initial {
+            width:100%; height:100%;
+            background:var(--blue);
+            display:flex; align-items:center; justify-content:center;
+            font-weight:800; font-size:20px; color:#fff;
+        }
+
+        /* ── Misc ── */
+        .shimmer-text { color:var(--blue); text-shadow: 0 0 8px rgba(0,210,255,0.7); }
+        .neon-text    { color:var(--blue); text-shadow: 0 0 12px rgba(0,210,255,0.8), 0 0 24px rgba(0,110,255,0.4); }
+        .neon-card    { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; }
+        .buy-btn      { transition:opacity .15s; cursor:pointer; }
+        .buy-btn:hover { opacity:.85; }
+        .buy-btn:active { opacity:.7; transform:scale(.97); }
+        .btn-gaming {
+            display:flex; align-items:center; justify-content:center; gap:6px;
+            background:var(--blue); color:#fff;
+            font-weight:700; border-radius:8px;
+            cursor:pointer; border:none;
+            transition:opacity .15s;
+        }
+        .btn-gaming:hover  { opacity:.88; }
+        .btn-gaming:active { opacity:.7; transform:scale(.97); }
+        .cat-btn {
+            padding:6px 14px; border-radius:20px;
+            border:1px solid var(--border);
+            background:transparent; color:var(--text-2);
+            font-size:12px; font-weight:500;
+            cursor:pointer; transition:all .15s;
+        }
+        .cat-btn.active, .cat-btn:hover {
+            background:var(--blue); border-color:var(--blue); color:#fff;
+        }
+        .popular-scroll { display:flex; gap:10px; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:4px; }
+        .popular-scroll::-webkit-scrollbar { display:none; }
+        .popular-card { min-width:180px; max-width:180px; scroll-snap-align:start; flex-shrink:0; }
+        .popular-scroll-wrapper::after { content:''; position:absolute; top:0; right:0; bottom:4px; width:40px; background:linear-gradient(to left,var(--bg-main),transparent); pointer-events:none; }
+        .popular-scroll-wrapper { position:relative; }
+        .filter-scroll { scrollbar-width:none; }
+        .filter-scroll::-webkit-scrollbar { display:none; }
+        .filter-sticky-left { position:sticky; left:0; z-index:10; flex-shrink:0; background:var(--bg-main); padding-right:6px; display:flex; }
+        .prod-filter { transition:all .15s; }
+        .testi-card { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; transition:border-color .2s; }
+        .testi-card:hover { border-color:var(--border-md); }
+        .trust-badge { transition:border-color .2s; }
+        .trust-badge:hover { border-color:var(--border-md) !important; }
+        .badge-tag { font-size:7px; letter-spacing:.04em; font-weight:800; padding:2px 6px; border-radius:4px; line-height:1.3; text-transform:uppercase; }
+        .platform-label { font-size:7px; letter-spacing:.04em; font-weight:700; padding:2px 5px; border-radius:3px; line-height:1.3; background:rgba(59,130,246,.15); color:#93c5fd; border:1px solid rgba(59,130,246,.25); }
+        .hm-logo::before { display:none; }
+        .hm-logo-img { display:block; flex-shrink:0; }
+        body::before, body::after { display:none; }
+    </style>
+
+    <!-- Dynamic Theme from DB -->
+    <style>
+        :root {
+            --neon-purple: <%= settings?.theme?.primaryColor || '#2563eb' %>;
+            --neon-violet: <%= settings?.theme?.secondaryColor || '#6366f1' %>;
+            --accent-color:<%= settings?.theme?.accentColor || '#2563eb' %>;
+            --bg-dark:     <%= settings?.theme?.backgroundColor || '#050c26' %>;
+            --bg-card:     <%= settings?.theme?.cardBackground || '#0d1a4a' %>;
+            --glow-color:  rgba(37,99,235,0.1);
+        }
+    </style>
+</head>
+<body class="font-inter">
+    <div id="toast-container"></div>
+    <div id="purchase-notif-container"></div>
+
+    <%- body %>
+
+    <!-- ══ SEARCH PANEL ══ -->
+    <div id="search-panel" class="fixed inset-0 flex-col" style="display:none;background:var(--bg-main);z-index:8000;">
+        <div class="flex items-center gap-3 p-4 border-b" style="border-color:var(--border);">
+            <button onclick="closeSearch()" class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,.05);border:1px solid var(--border);">
+                <iconify-icon icon="mdi:arrow-left" style="color:var(--text-2);font-size:18px;"></iconify-icon>
+            </button>
+            <div class="flex-1 relative">
+                <iconify-icon icon="mdi:magnify" class="absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--text-3);font-size:16px;"></iconify-icon>
+                <input type="text" id="searchInput" placeholder="Cari produk..." class="hm-input pl-9" oninput="doSearch(this.value)">
+            </div>
+        </div>
+        <div id="searchResults" class="flex-1 overflow-y-auto p-4">
+            <div class="text-center py-16" style="color:var(--text-3);">
+                <iconify-icon icon="mdi:magnify" style="font-size:40px;" class="block mb-2"></iconify-icon>
+                <p class="text-sm">Ketik untuk mencari produk...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ CART PANEL ══ -->
+    <div id="cart-panel" class="fixed inset-0" style="display:none;z-index:8000;">
+        <div id="cart-panel-overlay" onclick="closeCart()" class="absolute inset-0" style="background:rgba(0,0,0,.7);"></div>
+        <div id="cart-panel-content" class="modal-sheet absolute bottom-0 left-0 right-0">
+            <div class="flex items-center justify-between p-4 sticky top-0" style="background:var(--bg-card);border-bottom:1px solid var(--border);">
+                <h3 class="font-bold text-sm" style="color:var(--text-1);">Keranjang</h3>
+                <button onclick="closeCart()" class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.05);border:1px solid var(--border);">
+                    <iconify-icon icon="mdi:close" style="color:var(--text-2);"></iconify-icon>
+                </button>
+            </div>
+            <div id="cartItems" class="p-4 space-y-3"></div>
+        </div>
+    </div>
+
+    <!-- ══ TRACK PANEL ══ -->
+    <div id="track-panel" class="fixed inset-0 hidden" style="z-index:8000;">
+        <div class="absolute inset-0" style="background:rgba(0,0,0,.7);" onclick="closeTrack()"></div>
+        <div class="modal-sheet absolute bottom-0 left-0 right-0 p-5">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-sm" style="color:var(--text-1);">Lacak Pesanan</h3>
+                <button onclick="closeTrack()" class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.05);border:1px solid var(--border);">
+                    <iconify-icon icon="mdi:close" style="color:var(--text-2);"></iconify-icon>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <input type="text" id="trackCode" placeholder="VR-XXXX-XXXX" class="hm-input font-mono uppercase tracking-widest" maxlength="14" oninput="this.value=this.value.toUpperCase()">
+                <button onclick="doTrack()" class="btn btn-primary w-full py-2.5 text-sm">
+                    <iconify-icon icon="mdi:magnify"></iconify-icon> Cek Status
+                </button>
+                <div id="trackResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MENU DRAWER ══ -->
+    <div id="menu-drawer" class="fixed inset-0" style="display:none;z-index:8000;">
+        <div id="menu-drawer-overlay" onclick="closeMenu()" class="absolute inset-0" style="background:rgba(0,0,0,.7);animation:fadeIn .2s ease;"></div>
+        <div class="side-drawer" id="menu-drawer-content">
+
+            <!-- Header -->
+            <div class="flex items-center justify-between p-4" style="border-bottom:1px solid var(--border);">
+                <div class="flex items-center gap-2">
+                    <% if (settings?.logoUrl) { %>
+                    <img src="<%= settings.logoUrl %>" alt="Logo" style="height:26px;width:auto;object-fit:contain;max-width:30px;flex-shrink:0;">
+                    <% } else { %>
+                    <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--blue);">
+                        <iconify-icon icon="mdi:store" style="color:#fff;font-size:14px;"></iconify-icon>
+                    </div>
+                    <% } %>
+                    <span style="font-family:'Inter',sans-serif;font-weight:900;font-size:14px;color:#ffffff;letter-spacing:.01em;line-height:1;"><%= settings?.siteName || 'YOOSKY STORE' %></span>
+                </div>
+                <button onclick="closeMenu()" class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.05);border:1px solid var(--border);">
+                    <iconify-icon icon="mdi:close" style="color:var(--text-2);"></iconify-icon>
+                </button>
+            </div>
+
+            <!-- Profile (if logged in) -->
+            <% if (typeof user !== 'undefined' && user) { %>
+            <div class="p-4" style="border-bottom:1px solid var(--border);">
+                <div class="flex items-center gap-3 p-3 rounded-xl" style="background:rgba(255,255,255,.04);border:1px solid var(--border);">
+                    <% if (!isAdmin) { %><input type="file" id="avatarInput" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="uploadAvatar(this)"><% } %>
+                    <div class="<%= !isAdmin ? 'avatar-wrap' : '' %>" onclick="<%= isAdmin ? '' : "document.getElementById('avatarInput').click()" %>">
+                        <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0" style="border:1.5px solid var(--border-md);" id="profilePhotoWrap">
+                            <% if (user.photo) { %>
+                                <img src="<%= user.photo %>" class="w-full h-full object-cover" id="profilePhotoImg">
+                            <% } else if (isAdmin) { %>
+                                <div class="w-full h-full flex items-center justify-center" style="background:#ea580c;">
+                                    <iconify-icon icon="mdi:shield-crown" style="color:#fff;font-size:16px;"></iconify-icon>
+                                </div>
+                            <% } else { %>
+                                <div class="w-full h-full flex items-center justify-center font-black text-sm text-white" style="background:var(--blue);" id="profilePhotoInitial"><%= user.username.charAt(0).toUpperCase() %></div>
+                            <% } %>
+                        </div>
+                        <% if (!isAdmin) { %><div class="avatar-overlay"><iconify-icon icon="mdi:camera" style="color:#fff;font-size:14px;"></iconify-icon></div><% } %>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-1.5 mb-0.5">
+                            <div class="text-sm font-bold truncate" style="color:var(--text-1);"><%= user.username %></div>
+                            <% if (isAdmin) { %>
+                            <span class="text-[8px] font-black px-1.5 py-0.5 rounded" style="background:rgba(234,88,12,.2);color:#fb923c;border:1px solid rgba(234,88,12,.3);">ADMIN</span>
+                            <% } else if (user.is_reseller) { %>
+                            <span class="text-[8px] font-black px-1.5 py-0.5 rounded" style="background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.25);">VIP</span>
+                            <% } %>
+                        </div>
+                        <div class="text-[10px]" style="color:var(--text-3);">
+                            <%= isAdmin ? 'Administrator' : (user.is_reseller ? 'Reseller VIP' : 'Member') %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <% } %>
+
+            <!-- Nav Links -->
+            <div class="p-3 space-y-0.5">
+                <a href="/" onclick="closeMenu()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors" style="color:var(--text-2);" onmouseover="this.style.color='var(--text-1)';this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.color='var(--text-2)';this.style.background='transparent'">
+                    <iconify-icon icon="mdi:home-variant" style="color:var(--blue);font-size:18px;"></iconify-icon> Beranda
+                </a>
+                <a href="/invoice" onclick="closeMenu()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors" style="color:var(--text-2);" onmouseover="this.style.color='var(--text-1)';this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.color='var(--text-2)';this.style.background='transparent'">
+                    <iconify-icon icon="mdi:package-variant-closed" style="color:var(--green);font-size:18px;"></iconify-icon> Cek Pesanan
+                </a>
+                <% if (typeof user !== 'undefined' && user && !isAdmin) { %>
+                <a href="/dashboard" onclick="closeMenu()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors" style="color:var(--text-2);" onmouseover="this.style.color='var(--text-1)';this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.color='var(--text-2)';this.style.background='transparent'">
+                    <iconify-icon icon="mdi:view-dashboard" style="color:var(--blue);font-size:18px;"></iconify-icon> Dashboard
+                </a>
+                <% } %>
+
+                <% if (!isAdmin) { %>
+                    <% if (typeof user !== 'undefined' && user && user.is_reseller) { %>
+                    <a href="/reseller" onclick="closeMenu()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold" style="color:#fbbf24;">
+                        <iconify-icon icon="mdi:crown" style="font-size:18px;"></iconify-icon>
+                        <span class="flex-1">Status VIP</span>
+                        <span class="text-[9px] px-1.5 py-0.5 rounded font-black" style="background:rgba(245,158,11,.15);color:#fbbf24;">AKTIF</span>
+                    </a>
+                    <% } else if (typeof settings !== 'undefined' && settings.resellerEnabled !== false) { %>
+                    <a href="/reseller" onclick="closeMenu()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium" style="color:var(--text-2);" onmouseover="this.style.color='var(--text-1)';this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.color='var(--text-2)';this.style.background='transparent'">
+                        <iconify-icon icon="mdi:crown" style="color:var(--amber);font-size:18px;"></iconify-icon> Jadi Reseller VIP
+                    </a>
+                    <% } %>
+                <% } %>
+
+                <div class="my-1" style="border-top:1px solid var(--border);"></div>
+
+                <% if (typeof user !== 'undefined' && user) { %>
+                    <a href="/logout" onclick="doLogout(event)" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium" style="color:var(--red);" onmouseover="this.style.background='rgba(239,68,68,.06)'" onmouseout="this.style.background='transparent'">
+                        <iconify-icon icon="mdi:logout" style="font-size:18px;"></iconify-icon> Logout
+                    </a>
+                <% } else { %>
+                    <a href="/login" onclick="closeMenu()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium" style="color:var(--blue);" onmouseover="this.style.background='rgba(59,130,246,.06)'" onmouseout="this.style.background='transparent'">
+                        <iconify-icon icon="mdi:login" style="font-size:18px;"></iconify-icon> Login
+                    </a>
+                    <a href="/register" onclick="closeMenu()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium" style="color:var(--green);" onmouseover="this.style.background='rgba(34,197,94,.06)'" onmouseout="this.style.background='transparent'">
+                        <iconify-icon icon="mdi:account-plus" style="font-size:18px;"></iconify-icon> Daftar
+                    </a>
+                <% } %>
+
+                <% if (isAdmin) { %>
+                <div class="my-1" style="border-top:1px solid rgba(234,88,12,.15);"></div>
+                <a href="/admin" onclick="closeMenu()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold" style="color:#fb923c;" onmouseover="this.style.background='rgba(234,88,12,.06)'" onmouseout="this.style.background='transparent'">
+                    <iconify-icon icon="mdi:shield-crown" style="font-size:18px;"></iconify-icon> Admin Panel
+                </a>
+                <% } %>
+
+                <div class="my-1" style="border-top:1px solid var(--border);"></div>
+                <% if (settings?.contact?.whatsapp) { %>
+                <a href="https://wa.me/<%= (settings.contact.whatsapp||'').replace(/\D/g,'') %>" target="_blank" onclick="closeMenu()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm" style="color:var(--text-2);" onmouseover="this.style.color='var(--text-1)';this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.color='var(--text-2)';this.style.background='transparent'">
+                    <iconify-icon icon="mdi:whatsapp" style="color:var(--brand-wa);font-size:18px;"></iconify-icon> Hubungi CS (WA)
+                </a>
+                <% } %>
+                <% if (settings?.contact?.waChannel) { %>
+                <a href="<%= settings.contact.waChannel %>" target="_blank" onclick="closeMenu()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm" style="color:var(--text-2);" onmouseover="this.style.color='var(--text-1)';this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.color='var(--text-2)';this.style.background='transparent'">
+                    <iconify-icon icon="mdi:broadcast" style="color:var(--brand-wa);font-size:18px;"></iconify-icon> Saluran WA
+                </a>
+                <% } %>
+                <% if (settings?.contact?.telegram) { %>
+                <a href="https://t.me/<%= settings.contact.telegram %>" target="_blank" onclick="closeMenu()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm" style="color:var(--text-2);" onmouseover="this.style.color='var(--text-1)';this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.color='var(--text-2)';this.style.background='transparent'">
+                    <iconify-icon icon="mdi:telegram" style="color:#60a5fa;font-size:18px;"></iconify-icon> Telegram
+                </a>
+                <% } %>
+            </div>
+
+            <div class="px-4 pb-6 pt-2 text-center text-[10px]" style="color:var(--text-3);">
+                &copy; 2026 <%= settings?.siteName || 'YOOSKY STORE' %>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ─── LOGOUT ───
+    function doLogout(e) {
+        e.preventDefault();
+        localStorage.removeItem('vpr_cart');
+        localStorage.removeItem('vpr_notifs');
+        window.location.href = '/logout';
+    }
+
+    // ─── TOAST ───
+    function showToast(msg, type='info') {
+        const c = document.getElementById('toast-container');
+        if (!c) return;
+        const icon = {success:'mdi:check-circle',error:'mdi:alert-circle',info:'mdi:information'}[type]||'mdi:information';
+        const clr  = {success:'var(--green)',error:'var(--red)',info:'var(--blue)'}[type]||'var(--blue)';
+        const t = document.createElement('div');
+        t.className = 'toast';
+        t.innerHTML = `<iconify-icon icon="${icon}" style="color:${clr};font-size:16px;flex-shrink:0;"></iconify-icon><span>${msg}</span>`;
+        c.appendChild(t);
+        setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 3200);
+    }
+
+    // ─── NAVBAR SCROLL ───
+    window.addEventListener('scroll', () => {
+        const n = document.getElementById('navbar');
+        if (n) n.classList.toggle('scrolled', window.scrollY > 10);
+    }, {passive:true});
+
+    // ─── PANELS ───
+    function _closeSearch() { const p=document.getElementById('search-panel'); p.style.display='none'; document.body.classList.remove('no-scroll'); }
+    function _closeCart()   { const p=document.getElementById('cart-panel');   p.style.display='none'; document.body.classList.remove('no-scroll'); }
+    function _closeTrack()  { document.getElementById('track-panel').classList.add('hidden'); document.body.classList.remove('no-scroll'); }
+    function _closeMenu()   { const p=document.getElementById('menu-drawer');  p.style.display='none'; document.body.classList.remove('no-scroll'); }
+
+    function openSearch() {
+        const p = document.getElementById('search-panel');
+        p.style.display = 'flex';
+        document.body.classList.add('no-scroll');
+        if (!allProducts.length) fetch('/api/products').then(r=>r.json()).then(d=>allProducts=d);
+        setTimeout(() => document.getElementById('searchInput')?.focus(), 80);
+    }
+    function closeSearch() { _closeSearch(); }
+
+    function openCart() {
+        renderCart();
+        const p = document.getElementById('cart-panel');
+        p.style.display = 'block';
+        document.body.classList.add('no-scroll');
+    }
+    function closeCart() { _closeCart(); }
+
+    function openTrack() {
+        document.getElementById('track-panel').classList.remove('hidden');
+        document.body.classList.add('no-scroll');
+    }
+    function closeTrack() { _closeTrack(); }
+
+    function openMenu() {
+        const p = document.getElementById('menu-drawer');
+        p.style.display = 'block';
+        const d = document.getElementById('menu-drawer-content');
+        d.style.animation = 'none';
+        void d.offsetWidth;
+        d.style.animation = 'slideRight .22s ease both';
+        document.body.classList.add('no-scroll');
+    }
+    function closeMenu() { _closeMenu(); }
+
+    function closeAll() { _closeSearch(); _closeCart(); _closeTrack(); _closeMenu(); }
+
+    // ─── SEARCH ───
+    let allProducts = [];
+    function doSearch(q) {
+        const rs = document.getElementById('searchResults');
+        if (!q.trim()) {
+            rs.innerHTML = '<div class="text-center py-16" style="color:var(--text-3);"><iconify-icon icon="mdi:magnify" style="font-size:36px;" class="block mb-2"></iconify-icon><p class="text-sm">Ketik untuk mencari...</p></div>';
+            return;
+        }
+        const f = allProducts.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || (p.category||'').toLowerCase().includes(q.toLowerCase()));
+        if (!f.length) {
+            rs.innerHTML = '<div class="text-center py-16" style="color:var(--text-3);"><iconify-icon icon="mdi:emoticon-sad-outline" style="font-size:36px;" class="block mb-2"></iconify-icon><p class="text-sm">Tidak ditemukan</p></div>';
+            return;
+        }
+        rs.innerHTML = f.map(p => `
+            <a href="/buy/${p.id}" class="flex items-center gap-3 p-3 rounded-xl mb-2 transition-colors block" style="border:1px solid var(--border);" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='transparent'">
+                <div class="w-11 h-11 rounded-lg overflow-hidden flex-shrink-0" style="background:var(--bg-hover);border:1px solid var(--border);">
+                    ${p.image ? `<img src="${p.image}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center"><iconify-icon icon="mdi:gamepad-variant" style="color:var(--blue);font-size:18px;"></iconify-icon></div>`}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="font-semibold text-sm truncate" style="color:var(--text-1);">${p.name}</div>
+                    <div class="text-xs mt-0.5" style="color:var(--text-3);">${p.category||''}</div>
+                    <div class="text-xs font-bold mt-0.5" style="color:var(--blue);">${p.items?.[0]?'Rp '+p.items[0].p.toLocaleString('id-ID'):''}</div>
+                </div>
+                <iconify-icon icon="mdi:chevron-right" style="color:var(--text-3);"></iconify-icon>
+            </a>`).join('');
+    }
+
+    // ─── CART ───
+    let cart = JSON.parse(localStorage.getItem('vpr_cart') || '[]');
+    function updateCartBadge() {
+        const b = document.getElementById('cart-badge');
+        if (!b) return;
+        if (cart.length > 0) { b.textContent = cart.length; b.style.display = 'flex'; }
+        else b.style.display = 'none';
+    }
+    function renderCart() {
+        const el = document.getElementById('cartItems');
+        if (!cart.length) {
+            el.innerHTML = '<div class="text-center py-10" style="color:var(--text-3);"><iconify-icon icon="mdi:cart-outline" style="font-size:40px;" class="block mb-2"></iconify-icon><p class="text-sm">Keranjang kosong</p><a href="/" class="text-xs mt-2 inline-block" style="color:var(--blue);">Lihat produk</a></div>';
+            return;
+        }
+        el.innerHTML = cart.map((item,i) => `
+            <div class="card p-3 flex items-center gap-3">
+                <div class="w-11 h-11 rounded-lg overflow-hidden flex-shrink-0" style="background:var(--bg-hover);border:1px solid var(--border);">
+                    ${item.image ? `<img src="${item.image}" class="w-full h-full object-cover">` : `<iconify-icon icon="mdi:gamepad-variant" style="color:var(--blue);font-size:18px;"></iconify-icon>`}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="font-semibold text-xs truncate" style="color:var(--text-1);">${item.name}</div>
+                    <div class="text-[11px] mt-0.5" style="color:var(--text-3);">${item.duration}</div>
+                    <div class="text-xs font-bold mt-0.5" style="color:var(--blue);">Rp ${item.price.toLocaleString('id-ID')}</div>
+                </div>
+                <button onclick="removeFromCart(${i})" class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:var(--red-dim);border:1px solid rgba(239,68,68,.2);">
+                    <iconify-icon icon="mdi:trash-can-outline" style="color:var(--red);font-size:14px;"></iconify-icon>
+                </button>
+            </div>`).join('') + `
+            <a href="/buy/${cart[0]?.productId}" class="btn btn-primary w-full py-2.5 mt-3 text-sm">
+                <iconify-icon icon="mdi:lightning-bolt"></iconify-icon> Lanjut Beli
+            </a>`;
+    }
+    function addToCart(item) {
+        cart.push(item);
+        localStorage.setItem('vpr_cart', JSON.stringify(cart));
+        updateCartBadge();
+        showToast('Ditambahkan ke keranjang', 'success');
+    }
+    function removeFromCart(i) {
+        cart.splice(i, 1);
+        localStorage.setItem('vpr_cart', JSON.stringify(cart));
+        updateCartBadge();
+        renderCart();
+    }
+
+    // ─── TRACK ───
+    async function doTrack() {
+        const code = document.getElementById('trackCode').value.trim().toUpperCase();
+        const rd = document.getElementById('trackResult');
+        if (!code) { showToast('Masukkan kode pesanan', 'error'); return; }
+        rd.innerHTML = '<div class="text-center py-4"><iconify-icon icon="mdi:loading" style="color:var(--blue);font-size:20px;" class="animate-spin"></iconify-icon></div>';
+        try {
+            const r = await fetch('/invoice', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`code=${code}`});
+            const html = await r.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const trx = doc.querySelector('.p-4.rounded-lg');
+            if (trx) { rd.innerHTML = `<div class="card p-4 mt-3">${trx.innerHTML}</div>`; }
+            else rd.innerHTML = '<div class="card p-3 mt-3 text-xs" style="color:var(--red);">Kode pesanan tidak ditemukan</div>';
+        } catch(e) {
+            rd.innerHTML = '<div class="card p-3 mt-3 text-xs" style="color:var(--red);">Gagal mengambil data</div>';
+        }
+    }
+
+    // ─── AVATAR UPLOAD ───
+    async function uploadAvatar(input) {
+        const file = input.files[0];
+        if (!file) return;
+        if (file.size > 2*1024*1024) { showToast('Maks 2MB', 'error'); return; }
+        const fd = new FormData();
+        fd.append('photo', file);
+        try {
+            showToast('Mengupload...', 'info');
+            const r = await fetch('/profile/photo', {method:'POST', body:fd});
+            const d = await r.json();
+            if (d.success) {
+                const wrap = document.getElementById('profilePhotoWrap');
+                if (wrap) wrap.innerHTML = `<img src="${d.photo}?t=${Date.now()}" class="w-full h-full object-cover">`;
+                showToast('Foto berhasil diperbarui', 'success');
+            } else showToast(d.message || 'Gagal upload', 'error');
+        } catch(e) { showToast('Gagal upload foto', 'error'); }
+        input.value = '';
+    }
+
+    // ─── PURCHASE NOTIF ───
+    let shownNotifIds = new Set(JSON.parse(localStorage.getItem('vpr_notifs')||'[]'));
+    let notifQueue = [], notifPlaying = false;
+    async function loadPurchaseNotifs() {
+        try {
+            const r = await fetch('/api/notifications');
+            const notifs = await r.json();
+            notifs.forEach(n => { if (!shownNotifIds.has(n.id)) { notifQueue.push(n); shownNotifIds.add(n.id); } });
+            localStorage.setItem('vpr_notifs', JSON.stringify([...shownNotifIds].slice(-100)));
+            if (!notifPlaying && notifQueue.length) playNextNotif();
+        } catch(e) {}
+    }
+    function playNextNotif() {
+        if (!notifQueue.length) { notifPlaying = false; return; }
+        notifPlaying = true;
+        showPurchaseNotif(notifQueue.shift());
+        setTimeout(playNextNotif, 4500);
+    }
+    function showPurchaseNotif(n) {
+        const c = document.getElementById('purchase-notif-container');
+        if (!c) return;
+        const bg = ['#1d4ed8','#0891b2','#15803d','#ea580c','#7c3aed'][n.buyerName.charCodeAt(0)%5];
+        const avatarHtml = n.buyerPhoto
+            ? `<img src="${n.buyerPhoto}" class="w-full h-full object-cover" style="border-radius:8px;">`
+            : `<div class="purchase-notif-avatar" style="background:${bg};">${n.buyerName.charAt(0).toUpperCase()}</div>`;
+        const el = document.createElement('div');
+        el.className = 'purchase-notif';
+        el.innerHTML = `${avatarHtml}<div class="purchase-notif-text"><div class="purchase-notif-name">${n.buyerName} baru saja beli</div><div class="purchase-notif-product">${n.productName}</div></div><div class="purchase-notif-price">Rp ${n.price.toLocaleString('id-ID')}</div>`;
+        c.appendChild(el);
+        setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3800);
+    }
+
+    // ─── INIT ───
+    document.addEventListener('DOMContentLoaded', () => {
+        updateCartBadge();
+        setTimeout(() => { loadPurchaseNotifs(); setInterval(loadPurchaseNotifs, 30000); }, 2000);
+    });
+    document.addEventListener('keydown', e => { if (e.key==='Escape') closeAll(); });
+    document.addEventListener('click', e => {
+        const a = e.target.closest('a[href]');
+        if (!a) return;
+        const href = a.getAttribute('href');
+        if (!href || href.startsWith('#') || href.startsWith('javascript') || a.target==='_blank') return;
+        if (a.getAttribute('onclick') || e.defaultPrevented) return;
+        e.preventDefault();
+        document.body.style.transition = 'opacity .15s';
+        document.body.style.opacity = '0';
+        setTimeout(() => { window.location.href = href; }, 150);
+    });
+    </script>
+</body>
+</html>

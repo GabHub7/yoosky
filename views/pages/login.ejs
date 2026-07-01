@@ -1,0 +1,107 @@
+<%
+const pageTitle = 'Login';
+%>
+
+<script>
+if (typeof window !== 'undefined') {
+  document.body.classList.add('auth-page');
+  window.addEventListener('load', () => document.body.classList.add('auth-page'));
+}
+</script>
+
+<div class="min-h-screen flex items-center justify-center px-4 py-20" style="background:var(--bg-main);">
+    <div class="w-full max-w-md">
+        <div class="text-center mb-8">
+            <% if (settings?.logoUrl) { %>
+            <img src="<%= settings.logoUrl %>" alt="Logo" class="h-14 w-auto mx-auto mb-4" style="object-fit:contain;">
+            <% } else { %>
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-4" style="background:var(--blue);">
+                <iconify-icon icon="mdi:store" style="color:#fff;font-size:28px;"></iconify-icon>
+            </div>
+            <% } %>
+            <h1 style="font-family:'Inter',sans-serif;font-weight:900;font-size:20px;color:#ffffff;letter-spacing:.01em;margin-bottom:8px;"><%= settings?.siteName || 'YOOSKY STORE' %></h1>
+            <p class="text-sm" style="color:var(--text-3);">Masuk ke akun Anda</p>
+        </div>
+
+        <div class="card rounded-xl overflow-hidden">
+            <div class="p-6">
+                <% if (error) { %>
+                    <div class="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center gap-2">
+                        <iconify-icon icon="mdi:alert-circle" class="text-red-400 text-lg"></iconify-icon>
+                        <span class="text-xs text-red-400"><%= error %></span>
+                    </div>
+                <% } %>
+
+                <form method="POST" action="/login" class="space-y-4" id="login-form">
+                    <input type="hidden" name="redirect" value="<%= redirect %>">
+
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-400 mb-2">Username</label>
+                        <div class="relative">
+                            <iconify-icon icon="mdi:account" class="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"></iconify-icon>
+                            <input type="text" name="username" required class="form-input pl-10" placeholder="Masukkan username" autofocus>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-400 mb-2">Password</label>
+                        <div class="relative">
+                            <iconify-icon icon="mdi:lock" class="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"></iconify-icon>
+                            <input type="password" name="password" id="login-password" required class="form-input pl-10 pr-10" placeholder="Masukkan password">
+                            <button type="button" onclick="togglePass('login-password','login-eye')" class="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
+                                <iconify-icon icon="mdi:eye-outline" id="login-eye" class="text-base"></iconify-icon>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Cloudflare Turnstile Widget -->
+                    <% if (turnstileSiteKey) { %>
+                    <div class="flex justify-center">
+                        <div class="cf-turnstile"
+                             data-sitekey="<%= turnstileSiteKey %>"
+                             data-theme="dark"
+                             data-size="flexible">
+                        </div>
+                    </div>
+                    <% } %>
+
+                    <button type="submit" class="btn-gaming w-full flex items-center justify-center gap-2" id="login-btn">
+                        <iconify-icon icon="mdi:login" class="text-base"></iconify-icon>
+                        <span>Masuk</span>
+                    </button>
+                </form>
+
+                <div class="mt-6 text-center">
+                    <p class="text-xs text-zinc-500">
+                        Belum punya akun?
+                        <a href="/register" class="text-blue-400 hover:text-blue-300 font-semibold">Daftar sekarang</a>
+                    </p>
+                </div>
+
+                <div class="mt-4 text-center">
+                    <a href="/" class="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
+                        <iconify-icon icon="mdi:arrow-left" class="text-xs"></iconify-icon> Kembali ke Beranda
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<% if (turnstileSiteKey) { %>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<% } %>
+
+<script>
+function togglePass(inputId, iconId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(iconId);
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('icon', 'mdi:eye-off-outline');
+    } else {
+        input.type = 'password';
+        icon.setAttribute('icon', 'mdi:eye-outline');
+    }
+}
+</script>

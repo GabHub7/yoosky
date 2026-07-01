@@ -1,0 +1,352 @@
+<%
+const pageTitle = 'Dashboard';
+%>
+
+<nav id="navbar" class="fixed top-0 left-0 right-0 z-50 bg-[#050c26]/95 backdrop-blur-md border-b border-indigo-500/10">
+    <div class="max-w-3xl mx-auto px-4">
+        <div class="flex items-center justify-between h-14">
+            <a href="/" class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center">
+                    <iconify-icon icon="mdi:view-dashboard" class="text-white text-sm"></iconify-icon>
+                </div>
+                <span class="font-bold text-sm font-bold shimmer-text">Dashboard</span>
+            </a>
+            <a href="/" class="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-all">
+                <iconify-icon icon="mdi:arrow-left" class="text-sm"></iconify-icon> Kembali
+            </a>
+        </div>
+    </div>
+</nav>
+
+<div class="min-h-screen pt-16 pb-20 px-4">
+<div class="max-w-3xl mx-auto">
+
+    <!-- Profile Greeting -->
+    <div class="flex items-center gap-3 mt-5 mb-5 fade-in-up">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-sm" style="background:linear-gradient(135deg,#6366f1,#6366f1)">
+            <%= (user?.username || 'U').charAt(0).toUpperCase() %>
+        </div>
+        <div>
+            <div class="text-sm font-bold text-white">Halo, <%= user?.username || 'Pengguna' %>!</div>
+            <div class="text-[11px] text-zinc-500">Selamat datang di dashboard kamu</div>
+        </div>
+    </div>
+
+    <!-- Wallet Saldo (khusus reseller) -->
+    <% if (user?.is_reseller) { %>
+    <div id="wallet" class="rounded-2xl p-4 mb-5 fade-in-up" style="background:linear-gradient(135deg,rgba(234,179,8,.12),rgba(234,179,8,.04));border:1px solid rgba(234,179,8,.25);scroll-margin-top:70px;">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+                <iconify-icon icon="mdi:wallet" class="text-yellow-400 text-base"></iconify-icon>
+                <span class="text-xs font-bold text-white">Saldo Wallet Reseller</span>
+            </div>
+            <span class="badge" style="background:rgba(234,179,8,.15);color:#fbbf24;border:1px solid rgba(234,179,8,.3);font-size:9px">VIP</span>
+        </div>
+        <div class="flex items-center justify-between">
+            <div class="text-2xl font-black text-yellow-400" id="dashBalanceShow">Rp <%= (user.balance||0).toLocaleString('id-ID') %></div>
+            <button onclick="openTopup()" class="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02]" style="background:#fbbf24;color:#000;">
+                <iconify-icon icon="mdi:plus-circle"></iconify-icon> Top Up
+            </button>
+        </div>
+        <p class="text-[10px] text-zinc-500 mt-2">Pakai saldo ini untuk beli key langsung tanpa scan QRIS lagi.</p>
+
+        <% if (walletTransactions && walletTransactions.length > 0) { %>
+        <div class="mt-3 pt-3 space-y-2" style="border-top:1px solid rgba(234,179,8,.15);">
+            <% walletTransactions.slice(0,5).forEach(t => { %>
+            <div class="flex items-center justify-between text-[11px]">
+                <div class="flex items-center gap-1.5 min-w-0">
+                    <iconify-icon icon="<%= (t.amount||0) >= 0 ? 'mdi:arrow-down-circle' : 'mdi:arrow-up-circle' %>" style="color:<%= (t.amount||0) >= 0 ? '#4ade80' : '#f87171' %>;font-size:13px;flex-shrink:0;"></iconify-icon>
+                    <span class="text-zinc-400 truncate"><%= t.productName %></span>
+                </div>
+                <span class="font-bold flex-shrink-0" style="color:<%= (t.amount||0) >= 0 ? '#4ade80' : '#f87171' %>;">
+                    <%= (t.amount||0) >= 0 ? '+' : '' %>Rp <%= Math.abs(t.amount||t.price||0).toLocaleString('id-ID') %>
+                </span>
+            </div>
+            <% }) %>
+        </div>
+        <% } %>
+    </div>
+    <% } %>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div class="rounded-2xl p-4 text-center transition-all hover:scale-[1.02]" style="background:linear-gradient(135deg,rgba(37,99,235,.12),rgba(37,99,235,.06));border:1px solid rgba(37,99,235,.25);">
+            <div class="text-2xl font-black font-bold text-white"><%= stats.totalOrders %></div>
+            <div class="text-[10px] text-zinc-500 mt-1 flex items-center justify-center gap-1">
+                <iconify-icon icon="mdi:receipt-text" class="text-blue-400 text-xs"></iconify-icon> Total Order
+            </div>
+        </div>
+        <div class="rounded-2xl p-4 text-center transition-all hover:scale-[1.02]" style="background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(5,150,105,.05));border:1px solid rgba(16,185,129,.25);">
+            <div class="text-2xl font-black font-bold text-white"><%= stats.successOrders %></div>
+            <div class="text-[10px] text-zinc-500 mt-1 flex items-center justify-center gap-1">
+                <iconify-icon icon="mdi:check-circle" class="text-emerald-400 text-xs"></iconify-icon> Berhasil
+            </div>
+        </div>
+        <div class="rounded-2xl p-4 text-center transition-all hover:scale-[1.02]" style="background:linear-gradient(135deg,rgba(234,179,8,.1),rgba(245,158,11,.05));border:1px solid rgba(234,179,8,.25);">
+            <div class="text-2xl font-black font-bold text-white"><%= stats.pendingOrders %></div>
+            <div class="text-[10px] text-zinc-500 mt-1 flex items-center justify-center gap-1">
+                <iconify-icon icon="mdi:clock-outline" class="text-yellow-400 text-xs"></iconify-icon> Pending
+            </div>
+        </div>
+        <div class="rounded-2xl p-4 text-center transition-all hover:scale-[1.02]" style="background:linear-gradient(135deg,rgba(236,72,153,.1),rgba(244,63,94,.05));border:1px solid rgba(236,72,153,.25);">
+            <div class="text-lg font-black font-bold text-white">Rp <%= (stats.totalSpent/1000).toFixed(0) %>K</div>
+            <div class="text-[10px] text-zinc-500 mt-1 flex items-center justify-center gap-1">
+                <iconify-icon icon="mdi:cash-multiple" class="text-pink-400 text-xs"></iconify-icon> Total Belanja
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Transactions -->
+    <div class="rounded-2xl overflow-hidden" style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);">
+        <div class="flex items-center gap-2 px-5 py-4 border-b border-white/5">
+            <iconify-icon icon="mdi:history" class="text-blue-400 text-base"></iconify-icon>
+            <span class="text-sm font-bold text-white">Riwayat Transaksi</span>
+            <span class="text-[10px] text-zinc-600 ml-auto"><%= transactions.length %> transaksi</span>
+        </div>
+        <div class="space-y-0">
+            <% if (transactions.length === 0) { %>
+            <div class="text-center py-12">
+                <iconify-icon icon="mdi:receipt-text-outline" class="text-4xl text-zinc-700 block mx-auto mb-3"></iconify-icon>
+                <p class="text-sm text-zinc-500">Belum ada transaksi</p>
+                <a href="/" class="text-xs text-blue-400 mt-2 inline-block">Mulai belanja sekarang</a>
+            </div>
+            <% } else { %>
+                <% transactions.forEach(t => { %>
+                <div class="flex items-center gap-3 px-5 py-3.5 border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0
+                        <%= t.status === 'done' ? 'bg-emerald-500/15' : t.status === 'pending' ? 'bg-yellow-500/15' : 'bg-red-500/15' %>">
+                        <iconify-icon icon="<%= t.status === 'done' ? 'mdi:check-circle' : t.status === 'pending' ? 'mdi:clock-outline' : 'mdi:close-circle' %>"
+                            class="<%= t.status === 'done' ? 'text-emerald-400' : t.status === 'pending' ? 'text-yellow-400' : 'text-red-400' %> text-base"></iconify-icon>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-semibold text-white truncate"><%= t.productName || t.type || 'Produk' %></span>
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded
+                                <%= t.status === 'done' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' :
+                                   t.status === 'pending' ? 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/25' :
+                                   'bg-red-500/15 text-red-400 border border-red-500/25' %>"><%= t.status === 'done' ? 'SELESAI' : t.status === 'pending' ? 'PENDING' : 'BATAL' %></span>
+                        </div>
+                        <div class="flex items-center gap-2 text-[10px] text-zinc-500 mt-0.5">
+                            <span><%= t.code || t.orderId || '—' %></span>
+                            <span>·</span>
+                            <span><%= t.time || new Date(t.createdAt).toLocaleDateString('id-ID') %></span>
+                        </div>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                        <div class="text-xs font-bold <%= t.status === 'done' ? 'text-emerald-400' : 'text-white' %>">Rp <%= (t.price || 0).toLocaleString('id-ID') %></div>
+                        <% if (t.voucherDiscount) { %>
+                        <div class="text-[9px] text-emerald-500">-Rp <%= t.voucherDiscount.toLocaleString('id-ID') %></div>
+                        <% } %>
+                    </div>
+                </div>
+                <% }) %>
+                <a href="/invoice" class="flex items-center justify-center gap-2 px-5 py-3 text-[11px] text-blue-400 hover:text-blue-300 transition-colors font-medium">
+                    <iconify-icon icon="mdi:magnify" class="text-sm"></iconify-icon> Cari transaksi lain via kode pesanan
+                </a>
+            <% } %>
+        </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="grid grid-cols-2 gap-3 mt-4">
+        <a href="/" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold transition-all hover:scale-[1.02]"
+           style="background:linear-gradient(135deg,rgba(37,99,235,.15),rgba(37,99,235,.08));border:1px solid rgba(37,99,235,.3);color:#38bdf8;">
+            <iconify-icon icon="mdi:shopping" class="text-base"></iconify-icon> Belanja
+        </a>
+        <button onclick="openCart()" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold transition-all hover:scale-[1.02]"
+           style="background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(5,150,105,.06));border:1px solid rgba(16,185,129,.25);color:#34d399;">
+            <iconify-icon icon="mdi:cart-outline" class="text-base"></iconify-icon> Keranjang
+            <span id="dash-cart-count" style="display:none;background:#34d399;color:#000;font-size:9px;font-weight:900;padding:1px 5px;border-radius:99px;"></span>
+        </button>
+    </div>
+
+</div>
+</div>
+
+<!-- ── TOP UP SALDO MODAL ── -->
+<% if (user?.is_reseller) { %>
+<div id="topupModal" class="fixed inset-0 hidden" style="z-index:99999;">
+    <div class="absolute inset-0 bg-black/85 backdrop-blur-sm" onclick="closeTopup()"></div>
+    <div class="absolute inset-0 flex flex-col justify-end pointer-events-none">
+        <div class="pointer-events-auto rounded-t-2xl w-full max-w-3xl mx-auto"
+             style="background:var(--bg-card, #0d1326);border-top:1px solid rgba(255,255,255,.08);max-height:95dvh;overflow-y:auto;padding-bottom:calc(20px + env(safe-area-inset-bottom));">
+            <div class="flex justify-center pt-3 pb-1"><div class="w-10 h-1 rounded-full bg-white/15"></div></div>
+            <div class="flex items-center justify-between px-5 py-3 border-b border-white/5">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <iconify-icon icon="mdi:wallet-plus" class="text-yellow-400"></iconify-icon> Top Up Saldo
+                </h3>
+                <button onclick="closeTopup()" class="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+                    <iconify-icon icon="mdi:close"></iconify-icon>
+                </button>
+            </div>
+
+            <!-- STEP 1: input nominal -->
+            <div id="topupStepAmount" class="p-5 space-y-3">
+                <label class="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 block">NOMINAL TOP UP</label>
+                <input type="number" id="topupAmount" placeholder="Minimal Rp <%= (settings.resellerMinDeposit||50000).toLocaleString('id-ID') %>"
+                    class="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-white/25 outline-none"
+                    style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);"
+                    min="<%= settings.resellerMinDeposit||50000 %>" step="1000">
+                <div class="grid grid-cols-3 gap-2">
+                    <% [50000,100000,250000,500000,1000000,2000000].forEach(v => { %>
+                    <button type="button" onclick="document.getElementById('topupAmount').value=<%= v %>"
+                        class="py-2 rounded-lg text-[11px] font-bold text-zinc-300 transition-all" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);">
+                        <%= v >= 1000000 ? (v/1000000)+'jt' : (v/1000)+'rb' %>
+                    </button>
+                    <% }) %>
+                </div>
+                <button id="topupSubmitBtn" onclick="submitTopup()" class="w-full py-3.5 rounded-xl text-sm font-black text-black flex items-center justify-center gap-2" style="background:#fbbf24;">
+                    <iconify-icon icon="mdi:qrcode-scan" class="text-lg"></iconify-icon> Buat Pembayaran
+                </button>
+            </div>
+
+            <!-- STEP 2: QR pembayaran -->
+            <div id="topupStepQr" class="hidden p-5 space-y-4">
+                <div class="flex flex-col items-center">
+                    <div id="topupQrWrap" class="flex items-center justify-center" style="min-height:80px;">
+                        <iconify-icon icon="mdi:loading" class="text-4xl text-yellow-400 animate-spin"></iconify-icon>
+                    </div>
+                    <p class="text-[10px] text-zinc-500 mt-2">Scan dengan aplikasi mobile banking / e-wallet</p>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="rounded-xl p-3 text-center" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)">
+                        <div class="text-[10px] text-zinc-500 mb-0.5">Kode Top Up</div>
+                        <div class="text-sm font-mono font-black text-yellow-400 tracking-wider" id="topupCodeShow">—</div>
+                    </div>
+                    <div class="rounded-xl p-3 text-center" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)">
+                        <div class="text-[10px] text-zinc-500 mb-0.5">Nominal</div>
+                        <div class="text-sm font-black text-emerald-400" id="topupAmountShow">—</div>
+                    </div>
+                </div>
+                <div id="topupStatusRow" class="flex items-center justify-center gap-2 py-2">
+                    <div class="w-2 h-2 rounded-full bg-yellow-400"></div>
+                    <span class="text-xs text-zinc-400">Menunggu pembayaran...</span>
+                </div>
+                <div id="topupStaticNote" class="hidden text-center rounded-xl p-3" style="background:rgba(234,179,8,.07);border:1px solid rgba(234,179,8,.2)">
+                    <p class="text-xs text-yellow-300">Setelah transfer, kirim bukti ke admin via WhatsApp agar saldo segera dikonfirmasi</p>
+                    <a id="topupWaBtn" href="#" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 mt-2 rounded-lg text-xs font-bold text-white" style="background:rgba(34,197,94,.2);border:1px solid rgba(34,197,94,.35)">
+                        <iconify-icon icon="mdi:whatsapp" class="text-green-400 text-sm"></iconify-icon> WhatsApp
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let topupPayInterval = null;
+let topupRefId = null;
+const MIN_DEPOSIT = <%= settings.resellerMinDeposit||50000 %>;
+const WA_NUMBER = '<%= settings.contact?.whatsapp || "6285181236886" %>';
+
+function openTopup() {
+    document.getElementById('topupModal').classList.remove('hidden');
+    document.getElementById('topupStepAmount').classList.remove('hidden');
+    document.getElementById('topupStepQr').classList.add('hidden');
+    document.getElementById('topupAmount').value = '';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeTopup() {
+    if (topupPayInterval) { clearInterval(topupPayInterval); topupPayInterval = null; }
+    document.getElementById('topupModal').classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+async function submitTopup() {
+    const amount = parseInt(document.getElementById('topupAmount').value);
+    if (!amount || amount < MIN_DEPOSIT) {
+        showToast(`Minimal top up Rp ${MIN_DEPOSIT.toLocaleString('id-ID')}`, 'error');
+        return;
+    }
+    const btn = document.getElementById('topupSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<iconify-icon icon="mdi:loading" class="text-lg animate-spin"></iconify-icon> Memproses...';
+    try {
+        const res = await fetch('/wallet/topup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount }) });
+        const data = await res.json();
+        if (data.success) {
+            showTopupQr(data);
+        } else {
+            showToast(data.message || 'Gagal membuat top up', 'error');
+        }
+    } catch(e) { showToast('Koneksi error: ' + e.message, 'error'); }
+    finally {
+        btn.disabled = false;
+        btn.innerHTML = '<iconify-icon icon="mdi:qrcode-scan" class="text-lg"></iconify-icon> Buat Pembayaran';
+    }
+}
+
+function showTopupQr(data) {
+    const { qrString, orderCode, refId, isStatic, qrisStaticImage, totalPayment } = data;
+    const amount = parseInt(document.getElementById('topupAmount').value);
+    const payAmount = totalPayment || amount;
+    topupRefId = refId;
+
+    document.getElementById('topupStepAmount').classList.add('hidden');
+    document.getElementById('topupStepQr').classList.remove('hidden');
+    document.getElementById('topupCodeShow').textContent = orderCode || '—';
+    document.getElementById('topupAmountShow').textContent = 'Rp ' + payAmount.toLocaleString('id-ID');
+    if (payAmount !== amount) {
+        document.getElementById('topupAmountShow').insertAdjacentHTML('afterend',
+            `<div class="text-[9px] text-zinc-500 mt-0.5">Saldo masuk: Rp ${amount.toLocaleString('id-ID')}</div>`);
+    }
+    document.getElementById('topupStatusRow').innerHTML =
+        '<div class="w-2 h-2 rounded-full bg-yellow-400"></div><span class="text-xs text-zinc-400">Menunggu pembayaran...</span>';
+
+    const wrap = document.getElementById('topupQrWrap');
+    if (isStatic && qrisStaticImage) {
+        wrap.innerHTML = `<div style="background:#fff;padding:12px;border-radius:16px;display:inline-block;">
+            <img src="${qrisStaticImage}" style="display:block;width:210px;height:210px;object-fit:contain;border-radius:6px;"></div>`;
+        document.getElementById('topupStaticNote').classList.remove('hidden');
+        document.getElementById('topupWaBtn').href = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Konfirmasi top up saldo reseller, kode: ' + orderCode + ', nominal: Rp ' + amount.toLocaleString('id-ID'))}`;
+    } else if (qrString) {
+        wrap.innerHTML = `<div style="background:#fff;padding:12px;border-radius:16px;display:inline-block;">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=210x210&color=000000&bgcolor=ffffff&qzone=1&data=${encodeURIComponent(qrString)}" style="display:block;width:210px;height:210px;border-radius:4px;"></div>`;
+    } else {
+        wrap.innerHTML = `<div class="text-center py-4"><iconify-icon icon="mdi:qrcode-remove" class="text-5xl text-zinc-700 block mb-2"></iconify-icon><p class="text-xs text-zinc-500">QRIS belum dikonfigurasi. Hubungi admin.</p></div>`;
+    }
+
+    if (refId && !isStatic) topupPayInterval = setInterval(() => checkTopupPay(refId), 4000);
+}
+
+async function checkTopupPay(refId) {
+    try {
+        const r = await fetch(`/check-payment/${refId}`);
+        const d = await r.json();
+        if (d.success && d.status === 'done') {
+            clearInterval(topupPayInterval);
+            document.getElementById('topupStatusRow').innerHTML =
+                '<iconify-icon icon="mdi:check-circle" class="text-emerald-400 text-xl"></iconify-icon><span class="text-sm font-bold text-emerald-400">Top up berhasil!</span>';
+            showToast('Saldo berhasil ditambahkan!', 'success');
+            const balEl = document.getElementById('dashBalanceShow');
+            if (balEl && typeof d.balance === 'number') balEl.textContent = 'Rp ' + d.balance.toLocaleString('id-ID');
+            setTimeout(() => { closeTopup(); window.location.reload(); }, 1500);
+        } else if (d.status === 'expired') {
+            clearInterval(topupPayInterval);
+            document.getElementById('topupStatusRow').innerHTML =
+                '<iconify-icon icon="mdi:clock-alert" class="text-red-400"></iconify-icon><span class="text-xs text-red-400">Pembayaran expired</span>';
+        }
+    } catch(e) {}
+}
+
+// Buka otomatis kalau diakses via /dashboard#wallet
+if (window.location.hash === '#wallet') {
+    setTimeout(() => { document.getElementById('wallet')?.scrollIntoView({ behavior:'smooth' }); }, 300);
+}
+</script>
+<% } %>
+
+<script>
+// Sync badge keranjang di dashboard
+(function() {
+    try {
+        const cart = JSON.parse(localStorage.getItem('vpr_cart') || '[]');
+        const badge = document.getElementById('dash-cart-count');
+        if (badge && cart.length > 0) {
+            badge.textContent = cart.length;
+            badge.style.display = 'inline-block';
+        }
+    } catch(e) {}
+})();
+</script>

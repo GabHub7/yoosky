@@ -1,0 +1,565 @@
+<%
+const pageTitle = 'Beranda';
+%>
+
+<!-- ══ NAVBAR ══ -->
+<nav id="navbar" style="position:fixed;top:0;left:0;right:0;z-index:50;background:rgba(5,12,38,.97);backdrop-filter:blur(14px);border-bottom:1px solid rgba(37,99,235,.2);">
+  <div style="max-width:1200px;margin:0 auto;padding:0 16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;height:56px;gap:12px;">
+
+      <!-- Logo -->
+      <a href="/" style="display:flex;align-items:center;gap:8px;text-decoration:none;flex-shrink:0;">
+        <% if (settings?.logoUrl) { %>
+        <img src="<%= settings.logoUrl %>" alt="Logo" style="height:32px;width:auto;object-fit:contain;max-width:36px;">
+        <% } else { %>
+        <div style="width:32px;height:32px;border-radius:8px;background:#2563eb;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <iconify-icon icon="mdi:store" style="color:#fff;font-size:18px;"></iconify-icon>
+        </div>
+        <% } %>
+        <span style="font-weight:900;font-size:15px;color:#fff;letter-spacing:.01em;line-height:1;"><%= settings?.siteName || 'YOOSKY STORE' %></span>
+      </a>
+
+      <!-- Right buttons -->
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;">
+        <!-- Search icon (semua ukuran layar) -->
+        <button onclick="openSearch()" style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(37,99,235,.2);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <iconify-icon icon="mdi:magnify" style="color:rgba(148,163,184,.7);font-size:18px;"></iconify-icon>
+        </button>
+        <% if (!user) { %>
+        <!-- Mobile: hanya MASUK saja -->
+        <a href="/login" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;color:rgba(148,163,184,.8);border:1px solid rgba(255,255,255,.1);text-decoration:none;white-space:nowrap;">MASUK</a>
+        <!-- Desktop: tambah DAFTAR -->
+        <a href="/register" class="nav-btn-desktop" style="padding:8px 14px;border-radius:8px;font-size:12px;font-weight:800;color:#fff;background:#2563eb;text-decoration:none;white-space:nowrap;">DAFTAR</a>
+        <% } else { %>
+        <!-- Mobile: hanya ikon akun -->
+        <a href="/dashboard" style="width:36px;height:36px;border-radius:8px;background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.25);display:flex;align-items:center;justify-content:center;text-decoration:none;" title="<%= user.username %>">
+          <iconify-icon icon="mdi:account" style="color:#60a5fa;font-size:18px;"></iconify-icon>
+        </a>
+        <!-- Desktop: nama lengkap -->
+        <a href="/dashboard" class="nav-btn-desktop" style="padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;color:#60a5fa;background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.25);text-decoration:none;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis;">
+          <iconify-icon icon="mdi:account" style="font-size:14px;vertical-align:middle;margin-right:4px;"></iconify-icon><%= user.username %>
+        </a>
+        <% } %>
+        <button onclick="openMenu()" style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(37,99,235,.18);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+          <iconify-icon icon="mdi:menu" style="color:rgba(148,163,184,.7);font-size:20px;"></iconify-icon>
+        </button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ══ HERO BANNER CAROUSEL ══ -->
+<div style="padding-top:56px;">
+  <div id="carousel-wrap" style="position:relative;overflow:hidden;height:clamp(180px,40vw,290px);background:#050c26;border-bottom:1px solid rgba(37,99,235,.25);user-select:none;">
+    <div id="carousel-track" style="display:flex;height:100%;transition:transform .52s cubic-bezier(.4,0,.2,1);will-change:transform;">
+      <!-- DEFAULT SLIDE -->
+      <div id="c-slide-default" style="flex:0 0 100%;position:relative;overflow:hidden;background:linear-gradient(135deg,#050c26 0%,#0d1a4a 55%,#050c26 100%);">
+        <div style="position:absolute;inset:0;background:radial-gradient(ellipse 70% 60% at 15% 50%,rgba(37,99,235,.35) 0%,transparent 70%);pointer-events:none;z-index:1;"></div>
+        <div style="position:absolute;inset:0;background:radial-gradient(ellipse 50% 80% at 85% 50%,rgba(99,102,241,.2) 0%,transparent 70%);pointer-events:none;z-index:1;"></div>
+        <div style="position:relative;z-index:10;height:100%;display:flex;flex-direction:column;justify-content:center;padding:clamp(14px,4vw,28px) clamp(18px,6vw,52px);max-width:640px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:9px;font-weight:900;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.45);color:#34d399;letter-spacing:.05em;">
+              <span style="width:6px;height:6px;border-radius:50%;background:#34d399;animation:blink 1.4s infinite;flex-shrink:0;"></span> LIVE
+            </span>
+            <span style="font-size:9px;font-weight:700;color:#60a5fa;letter-spacing:2px;text-transform:uppercase;">TOP 1 VIP MODS</span>
+          </div>
+          <div style="font-weight:900;color:#fff;line-height:1.05;margin-bottom:6px;font-size:clamp(22px,6vw,50px);text-shadow:0 0 32px rgba(37,99,235,.7);">BUY KEY GAME</div>
+          <div style="font-weight:900;margin-bottom:14px;font-size:clamp(13px,3.5vw,26px);background:linear-gradient(90deg,#fbbf24,#f97316);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">PALING MURAH & AMAN!</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <a href="#games" style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:12px;font-size:11px;font-weight:900;color:#fff;background:linear-gradient(135deg,#fbbf24,#f97316);text-decoration:none;box-shadow:0 3px 14px rgba(251,191,36,.4);">
+              <iconify-icon icon="mdi:shopping" style="font-size:13px;"></iconify-icon> BUY KEY GAME SEKARANG!
+            </a>
+            <a href="/invoice" style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:12px;font-size:11px;font-weight:700;color:#94a3b8;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);text-decoration:none;">
+              <iconify-icon icon="mdi:package-variant-closed" style="font-size:12px;"></iconify-icon> Cek Pesanan
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Dots -->
+    <div id="carousel-dots" style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;z-index:20;">
+      <div class="c-dot active"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MARQUEE ══ -->
+<div style="background:rgba(37,99,235,.1);border-top:1px solid rgba(37,99,235,.2);border-bottom:1px solid rgba(37,99,235,.2);overflow:hidden;padding:7px 0;">
+  <div style="display:flex;gap:40px;white-space:nowrap;animation:marqueeAnim 25s linear infinite;">
+    <span style="font-size:11px;font-weight:700;color:#93c5fd;flex-shrink:0;">🎮 Selamat Datang di <strong style="color:#fff;"><%= settings?.siteName||'YOOSKY STORE' %></strong> &nbsp;|&nbsp; Top 1 VIP Mods Terbaik Di Indonesia 🚀</span>
+    <span style="font-size:11px;font-weight:700;color:#fbbf24;flex-shrink:0;">⚡ PROSES INSTAN 0.01 DETIK</span>
+    <span style="font-size:11px;font-weight:700;color:#4ade80;flex-shrink:0;">🛡️ 100% AMAN & BERGARANSI</span>
+    <span style="font-size:11px;font-weight:700;color:#93c5fd;flex-shrink:0;">🤖 SISTEM OTOMATIS 24 JAM</span>
+    <span style="font-size:11px;font-weight:700;color:#c084fc;flex-shrink:0;">⭐ TRUSTED BY THOUSANDS OF USERS</span>
+    <span style="font-size:11px;font-weight:700;color:#fb923c;flex-shrink:0;">💼 OPEN RESELLER & DROPSHIP</span>
+    <!-- repeat -->
+    <span style="font-size:11px;font-weight:700;color:#93c5fd;flex-shrink:0;">🎮 Selamat Datang di <strong style="color:#fff;"><%= settings?.siteName||'YOOSKY STORE' %></strong> &nbsp;|&nbsp; Top 1 VIP Mods Terbaik Di Indonesia 🚀</span>
+    <span style="font-size:11px;font-weight:700;color:#fbbf24;flex-shrink:0;">⚡ PROSES INSTAN 0.01 DETIK</span>
+    <span style="font-size:11px;font-weight:700;color:#4ade80;flex-shrink:0;">🛡️ 100% AMAN & BERGARANSI</span>
+    <span style="font-size:11px;font-weight:700;color:#93c5fd;flex-shrink:0;">🤖 SISTEM OTOMATIS 24 JAM</span>
+    <span style="font-size:11px;font-weight:700;color:#c084fc;flex-shrink:0;">⭐ TRUSTED BY THOUSANDS OF USERS</span>
+    <span style="font-size:11px;font-weight:700;color:#fb923c;flex-shrink:0;">💼 OPEN RESELLER & DROPSHIP</span>
+  </div>
+</div>
+
+<!-- ══ SEARCH + FILTER ══ -->
+<div id="games" style="padding:16px 16px 0;max-width:1200px;margin:0 auto;">
+
+  <!-- Filter pills -->
+  <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none;-ms-overflow-style:none;">
+    <button onclick="filterProducts('all')" class="fpill active" data-pf="all"
+            style="flex-shrink:0;padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;white-space:nowrap;background:#2563eb;color:#fff;">
+      SEMUA
+    </button>
+    <% if (categories && categories.length > 0) { %>
+    <% categories.forEach(cat => { %>
+    <button onclick="filterProducts('<%= cat %>')" class="fpill" data-pf="<%= cat %>"
+            style="flex-shrink:0;padding:8px 18px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid rgba(37,99,235,.3);cursor:pointer;white-space:nowrap;background:rgba(13,26,77,.8);color:rgba(148,163,184,.8);">
+      <%= categoryLabels[cat] || cat.toUpperCase() %>
+    </button>
+    <% }); } %>
+  </div>
+</div>
+
+<!-- ══ PRODUK POPULER ══ -->
+<div style="padding:20px 16px 8px;max-width:1200px;margin:0 auto;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div>
+      <h2 style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:900;color:#fff;margin:0;">
+        <span style="width:4px;height:20px;border-radius:2px;background:#2563eb;flex-shrink:0;display:inline-block;"></span>
+        PRODUK POPULER
+      </h2>
+      <p style="font-size:10px;color:rgba(148,163,184,.5);margin:4px 0 0 12px;">KOLEKSI PRODUK PILIHAN TERBAIK KHUSUS UNTUK ANDA</p>
+    </div>
+    <a href="#games" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;color:#60a5fa;background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.25);text-decoration:none;white-space:nowrap;">
+      SEMUA <iconify-icon icon="mdi:chevron-right" style="font-size:14px;"></iconify-icon>
+    </a>
+  </div>
+
+  <!-- Horizontal scroll cards -->
+  <div style="position:relative;">
+    <div id="popular-track" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;-ms-overflow-style:none;">
+      <!-- skeletons -->
+      <% for(let i=0;i<4;i++){ %>
+      <div style="flex-shrink:0;min-width:155px;max-width:155px;scroll-snap-align:start;border-radius:12px;overflow:hidden;background:#0d1a4a;border:1px solid rgba(37,99,235,.2);animation:pulse 1.8s ease-in-out infinite;" style="animation-delay:<%=i*.15%>s">
+        <div style="height:120px;background:rgba(255,255,255,.03);"></div>
+        <div style="padding:10px;"><div style="height:10px;background:rgba(255,255,255,.04);border-radius:4px;width:80%;margin-bottom:6px;"></div><div style="height:8px;background:rgba(255,255,255,.03);border-radius:4px;width:55%;"></div></div>
+      </div>
+      <% } %>
+    </div>
+    <div style="position:absolute;top:0;right:0;bottom:6px;width:32px;background:linear-gradient(to left,#050c26,transparent);pointer-events:none;"></div>
+  </div>
+</div>
+
+<!-- ══ SEMUA PRODUK — 2 KOLOM BESAR DI MOBILE ══ -->
+<div style="padding:16px;max-width:1200px;margin:0 auto;padding-bottom:40px;">
+
+  <div id="product-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+
+    <% products.forEach((product, pIdx) => {
+      const stock = product.keys ? product.keys.length : 0;
+      const isOut = stock === 0;
+      const hasAndroid = product.platforms && product.platforms.includes('android');
+      const hasIos     = product.platforms && product.platforms.includes('ios');
+      const fakeSold   = [3200,2800,1900,4100,2100,3700,1500,2400,3300,1700,2600,4500,1200,2900,3800][pIdx%15];
+      const displaySold = (product.sold && product.sold>0) ? product.sold : fakeSold;
+      const soldLabel   = displaySold>=1000 ? (displaySold/1000).toFixed(1).replace('.0','')+'K' : String(displaySold);
+      const pricingArr  = product.pricingOptions || product.items || [];
+      const priceList   = pricingArr.map(x=>(typeof x==='object'?(x.price??x.p):x)).filter(v=>typeof v==='number');
+      const minPrice    = priceList.length ? Math.min(...priceList) : (product.price||0);
+      const badges      = ['BEST','HOT','TOP','NEW','SALE'];
+      const badgeBgs    = ['#ef4444','#f59e0b','#3b82f6','#22c55e','#a855f7'];
+      const badge       = product.badge || badges[pIdx%5];
+      const badgeBg     = badgeBgs[pIdx%5];
+      const platLabel   = hasAndroid ? 'ANDROID' : (hasIos ? 'iOS' : '');
+      const platBg      = hasIos ? 'rgba(59,130,246,.2)' : 'rgba(34,197,94,.15)';
+      const platClr     = hasIos ? '#93c5fd' : '#4ade80';
+      const platBdr     = hasIos ? 'rgba(59,130,246,.35)' : 'rgba(34,197,94,.3)';
+    %>
+
+    <div class="pcard" data-category="<%= product.category %>"
+         onclick="location.href='/buy/<%= product.id %>'"
+         style="border-radius:12px;overflow:hidden;background:#0d1a4a;border:1px solid rgba(37,99,235,.22);cursor:pointer;transition:border-color .2s,transform .15s;">
+
+      <!-- Gambar — tinggi besar -->
+      <div style="position:relative;height:clamp(130px,32vw,200px);overflow:hidden;">
+        <% if (product.image) { %>
+        <img src="<%= product.image %>" alt="<%= product.name %>"
+             style="width:100%;height:100%;object-fit:cover;display:block;"
+             loading="lazy"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(37,99,235,.06);">
+          <iconify-icon icon="solar:gamepad-bold" style="font-size:32px;color:rgba(37,99,235,.35);"></iconify-icon>
+        </div>
+        <% } else { %>
+        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(37,99,235,.06);">
+          <iconify-icon icon="solar:gamepad-bold" style="font-size:32px;color:rgba(37,99,235,.3);"></iconify-icon>
+        </div>
+        <% } %>
+
+        <!-- gradient bawah -->
+        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(13,26,77,.9) 0%,transparent 55%);pointer-events:none;"></div>
+
+        <!-- Badge kiri atas -->
+        <span style="position:absolute;top:7px;left:7px;z-index:10;font-size:9px;font-weight:900;padding:2px 7px;border-radius:4px;background:<%= badgeBg %>;color:#fff;letter-spacing:.04em;"><%= badge %></span>
+
+        <!-- Platform kanan atas -->
+        <% if (platLabel) { %>
+        <span style="position:absolute;top:7px;right:7px;z-index:10;font-size:8px;font-weight:800;padding:2px 6px;border-radius:4px;background:<%= platBg %>;color:<%= platClr %>;border:1px solid <%= platBdr %>;"><%= platLabel %></span>
+        <% } %>
+      </div>
+
+      <!-- Info -->
+      <div style="padding:10px;">
+        <div style="font-weight:800;font-size:11px;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:6px;line-height:1.3;"><%= product.name %></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;">
+          <span style="font-size:11px;font-weight:900;color:#60a5fa;">Rp <%= minPrice.toLocaleString('id-ID') %></span>
+          <span style="font-size:9px;color:rgba(148,163,184,.45);">Terjual <strong style="color:rgba(148,163,184,.7);"><%= soldLabel %></strong></span>
+        </div>
+        <% if (!isOut) { %>
+        <button style="width:100%;padding:9px 0;border-radius:8px;font-size:11px;font-weight:900;color:#fff;background:linear-gradient(135deg,#1d4ed8,#2563eb);border:none;display:flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;">
+          <iconify-icon icon="mdi:shopping" style="font-size:12px;"></iconify-icon> Beli
+        </button>
+        <% } else { %>
+        <button disabled style="width:100%;padding:9px 0;border-radius:8px;font-size:11px;font-weight:700;color:rgba(255,255,255,.25);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;gap:5px;cursor:not-allowed;">
+          <iconify-icon icon="mdi:close-circle-outline" style="font-size:12px;"></iconify-icon> Habis
+        </button>
+        <% } %>
+      </div>
+    </div>
+
+    <% }); %>
+  </div>
+
+  <% if (products.length === 0) { %>
+  <div style="text-align:center;padding:60px 0;color:rgba(148,163,184,.3);">
+    <iconify-icon icon="solar:box-minimalistic-bold" style="font-size:40px;display:block;margin-bottom:10px;"></iconify-icon>
+    <p style="font-size:12px;">Belum ada produk tersedia</p>
+  </div>
+  <% } %>
+</div>
+
+<!-- ══ TRUST BADGES ══ -->
+<div style="background:rgba(13,26,77,.5);border-top:1px solid rgba(37,99,235,.15);border-bottom:1px solid rgba(37,99,235,.15);padding:16px;">
+  <div style="max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
+
+    <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.18);">
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(37,99,235,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <iconify-icon icon="mdi:shield-check" style="color:#60a5fa;font-size:18px;"></iconify-icon>
+      </div>
+      <div><div style="font-size:11px;font-weight:900;color:#fff;">100% AMAN</div><div style="font-size:9px;color:rgba(148,163,184,.5);margin-top:2px;">GARANSI AKUN AMAN</div></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.18);">
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(37,99,235,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <iconify-icon icon="mdi:lightning-bolt" style="color:#fbbf24;font-size:18px;"></iconify-icon>
+      </div>
+      <div><div style="font-size:11px;font-weight:900;color:#fff;">PROSES CEPAT</div><div style="font-size:9px;color:rgba(148,163,184,.5);margin-top:2px;">INSTAN 0-1 MENIT</div></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.18);">
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(37,99,235,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <iconify-icon icon="mdi:headset" style="color:#a78bfa;font-size:18px;"></iconify-icon>
+      </div>
+      <div><div style="font-size:11px;font-weight:900;color:#fff;">24/7 SUPPORT</div><div style="font-size:9px;color:rgba(148,163,184,.5);margin-top:2px;">FAST RESPONSE</div></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.18);">
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(37,99,235,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <iconify-icon icon="mdi:star" style="color:#34d399;font-size:18px;"></iconify-icon>
+      </div>
+      <div><div style="font-size:11px;font-weight:900;color:#fff;">TRUSTED</div><div style="font-size:9px;color:rgba(148,163,184,.5);margin-top:2px;">RIBUAN+ PENGGUNA</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ RESELLER BANNER ══ -->
+<% if (user && user.is_reseller) { %>
+<div style="padding:12px 16px;max-width:1200px;margin:0 auto;">
+  <div style="border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.2);">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:38px;height:38px;border-radius:10px;background:rgba(234,179,8,.15);border:1px solid rgba(234,179,8,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <iconify-icon icon="solar:crown-bold" style="color:#fbbf24;font-size:18px;"></iconify-icon>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#fff;">Status Reseller VIP Aktif</div>
+        <div style="font-size:10px;color:rgba(148,163,184,.6);margin-top:2px;">Diskon <strong style="color:#fbbf24;"><%= resellerSettings.discount %>%</strong> aktif untuk semua pembelian</div>
+      </div>
+    </div>
+    <a href="/reseller" style="flex-shrink:0;padding:8px 14px;border-radius:8px;font-size:11px;font-weight:700;color:#fbbf24;background:rgba(234,179,8,.15);border:1px solid rgba(234,179,8,.3);text-decoration:none;white-space:nowrap;">Lihat Panel</a>
+  </div>
+</div>
+<% } %>
+
+<!-- ══ FOOTER ══ -->
+<footer style="background:#050c26;border-top:1px solid rgba(37,99,235,.18);padding:40px 16px 30px;">
+  <div style="max-width:1200px;margin:0 auto;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px;">
+
+      <!-- Brand -->
+      <div style="grid-column:1/-1;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <% if (settings?.logoUrl) { %>
+          <img src="<%= settings.logoUrl %>" alt="Logo" style="height:28px;width:auto;object-fit:contain;max-width:70px;">
+          <% } else { %>
+          <div style="width:28px;height:28px;border-radius:8px;background:#2563eb;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><iconify-icon icon="mdi:store" style="color:#fff;font-size:14px;"></iconify-icon></div>
+          <% } %>
+          <span style="font-weight:900;font-size:14px;color:#fff;"><%= settings.siteName||'YOOSKY STORE' %></span>
+        </div>
+        <p style="font-size:10px;color:rgba(148,163,184,.45);line-height:1.6;margin-bottom:12px;"><%= settings.about ? settings.about.substring(0,100)+'...' : 'Platform kunci mod menu premium terpercaya #1 di Indonesia.' %></p>
+        <div style="display:flex;gap:8px;">
+          <% if (settings.contact?.whatsapp) { %>
+          <a href="https://wa.me/<%= (settings.contact.whatsapp||'').replace(/\D/g,'') %>" target="_blank" style="width:32px;height:32px;border-radius:8px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.2);display:flex;align-items:center;justify-content:center;text-decoration:none;">
+            <iconify-icon icon="mdi:whatsapp" style="color:#4ade80;font-size:15px;"></iconify-icon>
+          </a>
+          <% } %>
+          <% if (settings.contact?.waChannel) { %>
+          <a href="<%= settings.contact.waChannel %>" target="_blank" style="width:32px;height:32px;border-radius:8px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.18);display:flex;align-items:center;justify-content:center;text-decoration:none;" title="Saluran WA">
+            <iconify-icon icon="mdi:broadcast" style="color:#4ade80;font-size:15px;"></iconify-icon>
+          </a>
+          <% } %>
+          <% if (settings.contact?.waGroup) { %>
+          <a href="<%= settings.contact.waGroup %>" target="_blank" style="width:32px;height:32px;border-radius:8px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.18);display:flex;align-items:center;justify-content:center;text-decoration:none;" title="GB WA Group">
+            <iconify-icon icon="mdi:account-group" style="color:#4ade80;font-size:15px;"></iconify-icon>
+          </a>
+          <% } %>
+          <% if (settings.contact?.telegram) { %>
+          <a href="https://t.me/<%= settings.contact.telegram %>" target="_blank" style="width:32px;height:32px;border-radius:8px;background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.22);display:flex;align-items:center;justify-content:center;text-decoration:none;">
+            <iconify-icon icon="mdi:telegram" style="color:#60a5fa;font-size:15px;"></iconify-icon>
+          </a>
+          <% } %>
+        </div>
+      </div>
+
+      <!-- Informasi -->
+      <div>
+        <h4 style="font-size:9px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;margin-bottom:12px;">INFORMASI</h4>
+        <div style="display:flex;flex-direction:column;gap:9px;">
+          <a href="/invoice" style="font-size:11px;font-weight:600;color:rgba(148,163,184,.5);text-decoration:none;">Cara Beli</a>
+          <a href="/invoice" style="font-size:11px;font-weight:600;color:rgba(148,163,184,.5);text-decoration:none;">Bantuan / FAQ</a>
+          <a href="/invoice" style="font-size:11px;font-weight:600;color:rgba(148,163,184,.5);text-decoration:none;">Syarat Ketentuan</a>
+        </div>
+      </div>
+
+      <!-- Layanan -->
+      <div>
+        <h4 style="font-size:9px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;margin-bottom:12px;">LAYANAN</h4>
+        <div style="display:flex;flex-direction:column;gap:9px;">
+          <a href="#popular-products" style="font-size:11px;font-weight:600;color:rgba(148,163,184,.5);text-decoration:none;">Produk Populer</a>
+          <a href="/invoice" style="font-size:11px;font-weight:600;color:rgba(148,163,184,.5);text-decoration:none;">Cek Riwayat</a>
+          <% if (resellerSettings?.enabled) { %>
+          <a href="/reseller" style="font-size:11px;font-weight:600;color:rgba(148,163,184,.5);text-decoration:none;">Kerjasama</a>
+          <% } %>
+        </div>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid rgba(37,99,235,.15);padding-top:16px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <p style="font-size:9px;font-weight:600;color:rgba(148,163,184,.35);margin:0;">&copy; 2026 <%= settings.siteName||'YOOSKY STORE' %>. All rights reserved.</p>
+      <div style="display:flex;align-items:center;gap:5px;font-size:9px;font-weight:600;color:rgba(148,163,184,.35);">
+        <span style="width:6px;height:6px;border-radius:50%;background:rgba(34,197,94,.6);"></span> Online
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Notifikasi pembelian user lain -->
+<div id="purchase-toast" style="position:fixed;bottom:22px;left:18px;z-index:39;max-width:270px;display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:14px;background:rgba(13,26,77,.97);backdrop-filter:blur(10px);border:1px solid rgba(37,99,235,.3);box-shadow:0 8px 28px rgba(0,0,0,.35);transform:translateY(140%);opacity:0;transition:transform .4s cubic-bezier(.4,0,.2,1),opacity .4s ease;pointer-events:none;">
+  <div id="pt-avatar" style="flex-shrink:0;width:34px;height:34px;border-radius:10px;background:rgba(37,99,235,.18);border:1px solid rgba(37,99,235,.35);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#60a5fa;">Y</div>
+  <div style="flex:1;min-width:0;">
+    <div id="pt-text" style="font-size:11px;font-weight:600;color:#e2e8f0;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;"></div>
+    <div id="pt-time" style="font-size:9px;color:rgba(148,163,184,.55);margin-top:3px;display:flex;align-items:center;gap:4px;">
+      <iconify-icon icon="mdi:check-decagram" style="color:#4ade80;font-size:10px;"></iconify-icon><span></span>
+    </div>
+  </div>
+  <button onclick="hidePurchaseToast()" style="flex-shrink:0;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.06);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;">
+    <iconify-icon icon="mdi:close" style="color:rgba(148,163,184,.6);font-size:11px;"></iconify-icon>
+  </button>
+</div>
+
+<!-- Floating WA -->
+<% if (settings.contact?.whatsapp) { %>
+<a href="https://wa.me/<%= (settings.contact?.whatsapp||'').replace(/\D/g,'') %>" target="_blank"
+   style="position:fixed;bottom:22px;right:18px;z-index:40;width:48px;height:48px;border-radius:50%;background:#22c55e;box-shadow:0 4px 20px rgba(34,197,94,.4);display:flex;align-items:center;justify-content:center;text-decoration:none;transition:transform .2s;"
+   onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+  <iconify-icon icon="mdi:whatsapp" style="color:#fff;font-size:24px;"></iconify-icon>
+</a>
+<% } %>
+
+<!-- ══ STYLES ══ -->
+<style>
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes marqueeAnim{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+
+/* Carousel */
+#carousel-track>div{flex:0 0 100%;width:100%;height:100%;position:relative;overflow:hidden;}
+.c-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.25);cursor:pointer;flex-shrink:0;transition:all .35s cubic-bezier(.4,0,.2,1);}
+.c-dot.active{width:26px;border-radius:4px;background:linear-gradient(90deg,#38bdf8,#6366f1,#38bdf8);background-size:200% 100%;animation:dotShimmer 1.6s linear infinite;box-shadow:0 0 10px rgba(99,102,241,.6);}
+@keyframes dotShimmer{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+
+/* Product grid: 3 col sm, 4 col lg */
+/* nav-btn-desktop: hide on mobile, show on sm+ */
+.nav-btn-desktop{display:none;}
+@media(min-width:640px){
+  #product-grid{grid-template-columns:repeat(3,1fr);}
+  .nav-btn-desktop{display:inline-flex!important;}
+}
+@media(min-width:1024px){
+  #product-grid{grid-template-columns:repeat(4,1fr);}
+}
+
+/* Card hover */
+.pcard:hover{border-color:rgba(37,99,235,.55)!important;transform:translateY(-3px)!important;}
+.pcard:active{transform:scale(.97)!important;opacity:.88;}
+
+/* Filter active */
+.fpill.active{background:#2563eb!important;color:#fff!important;border-color:#2563eb!important;}
+
+/* Trust badges: 4 col on sm+ */
+@media(min-width:640px){
+  .trust-grid{grid-template-columns:repeat(4,1fr)!important;}
+}
+
+/* Scrollbar hidden */
+#popular-track::-webkit-scrollbar{display:none;}
+</style>
+
+<!-- ══ SCRIPTS ══ -->
+<script>
+/* Carousel */
+(function(){
+  let slides=[],cur=0,total=1,timer=null;
+  const IV=4500;
+  async function init(){
+    try{const r=await fetch('/api/banners');slides=await r.json();}catch{slides=[];}
+    const track=document.getElementById('carousel-track');
+    const dots=document.getElementById('carousel-dots');
+    if(!slides.length){total=1;return;}
+    document.getElementById('c-slide-default')?.remove();
+    track.innerHTML=slides.map((s,i)=>{
+      const cl=s.link&&s.link!=='/';
+      return`<div style="flex:0 0 100%;position:relative;overflow:hidden;"${cl?` onclick="window.location='${s.link}'" style="flex:0 0 100%;position:relative;overflow:hidden;cursor:pointer;"`:''}>
+        <img src="${s.imageUrl}" alt="${s.title||''}" loading="${i===0?'eager':'lazy'}"
+             style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"
+             onerror="this.style.display='none'">
+        <div style="position:absolute;inset:0;background:linear-gradient(105deg,rgba(0,0,0,.78) 0%,rgba(0,0,0,.3) 55%,transparent 100%);z-index:1;"></div>
+        <div style="position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;justify-content:center;padding:clamp(14px,4vw,30px) clamp(18px,6vw,50px);max-width:65%;">
+          ${s.title?`<div style="font-size:clamp(16px,4vw,38px);font-weight:900;color:#fff;line-height:1.1;text-shadow:0 2px 20px rgba(0,0,0,.8);">${s.title}</div>`:''}
+          ${s.subtitle?`<div style="font-size:clamp(10px,1.8vw,14px);color:rgba(255,255,255,.7);margin-top:6px;">${s.subtitle}</div>`:''}
+          ${cl?`<div style="display:inline-flex;align-items:center;gap:5px;margin-top:12px;padding:8px 18px;border-radius:10px;font-size:11px;font-weight:800;background:linear-gradient(135deg,#fbbf24,#f97316);color:#fff;width:fit-content;"><iconify-icon icon="mdi:arrow-right" style="font-size:12px;"></iconify-icon> Lihat Detail</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+    total=slides.length;
+    dots.innerHTML=slides.map((_,i)=>`<div class="c-dot${i===0?' active':''}" onclick="goSlide(${i})"></div>`).join('');
+    if(total>1){startAuto();addSwipe();}
+    goSlide(0);
+  }
+  window.goSlide=function(idx){if(total<=1)return;cur=((idx%total)+total)%total;document.getElementById('carousel-track').style.transform=`translateX(-${cur*100}%)`;document.querySelectorAll('.c-dot').forEach((d,i)=>d.classList.toggle('active',i===cur));};
+  function startAuto(){clearInterval(timer);timer=setInterval(()=>goSlide(cur+1),IV);}
+  function addSwipe(){const w=document.getElementById('carousel-wrap');w.addEventListener('touchstart',e=>{clearInterval(timer);w._tx=e.touches[0].clientX;},{passive:true});w.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-w._tx;if(Math.abs(dx)>38)goSlide(cur+(dx<0?1:-1));startAuto();},{passive:true});}
+  document.addEventListener('DOMContentLoaded',init);
+})();
+
+/* Filter */
+function filterProducts(cat){
+  document.querySelectorAll('[data-category]').forEach(c=>{c.style.display=(cat==='all'||c.dataset.category===cat)?'':'none';});
+  document.querySelectorAll('.fpill').forEach(b=>{
+    const active=b.dataset.pf===cat;
+    b.classList.toggle('active',active);
+    if(active){b.style.background='#2563eb';b.style.color='#fff';b.style.borderColor='#2563eb';}
+    else{b.style.background='rgba(13,26,77,.8)';b.style.color='rgba(148,163,184,.8)';b.style.borderColor='rgba(37,99,235,.3)';}
+  });
+}
+
+/* Popular products */
+async function loadPopular(){
+  const track=document.getElementById('popular-track');
+  if(!track)return;
+  try{
+    const data=<%- JSON.stringify(popularProducts) %>;
+    if(!data.length){track.innerHTML='<p style="font-size:11px;color:rgba(148,163,184,.3);padding:10px;">Belum ada produk populer</p>';return;}
+    const badges=['BEST','HOT','TOP','NEW','SALE'];
+    const badgeBgs=['#ef4444','#f59e0b','#3b82f6','#22c55e','#a855f7'];
+    track.innerHTML=data.map((p,i)=>{
+      const isOut=!(p.stockCount>0);
+      const price=p.items&&p.items.length>0?p.items[0].p:null;
+      const plat=p.platforms&&p.platforms.length>0?p.platforms[0].toUpperCase():'';
+      const badge=p.badge||badges[i%5];
+      const bg=badgeBgs[i%5];
+      const platClr=plat==='IOS'?'#93c5fd':'#4ade80';
+      const platBg=plat==='IOS'?'rgba(59,130,246,.2)':'rgba(34,197,94,.15)';
+      return`<div onclick="location.href='/buy/${p.id}'" style="flex-shrink:0;min-width:155px;max-width:155px;scroll-snap-align:start;border-radius:12px;overflow:hidden;background:#0d1a4a;border:1px solid rgba(37,99,235,.22);cursor:pointer;transition:border-color .2s,transform .15s;"
+        onmouseover="this.style.borderColor='rgba(37,99,235,.55)';this.style.transform='translateY(-2px)'"
+        onmouseout="this.style.borderColor='rgba(37,99,235,.22)';this.style.transform=''">
+        <div style="position:relative;height:110px;overflow:hidden;">
+          ${badge?`<span style="position:absolute;top:6px;left:6px;z-index:10;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;background:${bg};color:#fff;">${badge}</span>`:''}
+          ${plat?`<span style="position:absolute;top:6px;right:6px;z-index:10;font-size:8px;font-weight:800;padding:2px 5px;border-radius:3px;background:${platBg};color:${platClr};">${plat}</span>`:''}
+          ${p.image?`<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;" loading="lazy">`:`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(37,99,235,.06);"><iconify-icon icon="solar:gamepad-bold" style="font-size:28px;color:rgba(37,99,235,.35);"></iconify-icon></div>`}
+          <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(13,26,77,.8) 0%,transparent 55%);pointer-events:none;"></div>
+        </div>
+        <div style="padding:9px;">
+          <div style="font-size:11px;font-weight:800;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:5px;">${p.name}</div>
+          ${price?`<div style="font-size:11px;font-weight:900;color:#60a5fa;margin-bottom:8px;">Rp ${Number(price).toLocaleString('id-ID')}</div>`:''}
+          <button style="width:100%;padding:7px 0;border-radius:7px;font-size:10px;font-weight:900;color:${isOut?'rgba(255,255,255,.25)':'#fff'};background:${isOut?'rgba(255,255,255,.04)':'linear-gradient(135deg,#1d4ed8,#2563eb)'};border:${isOut?'1px solid rgba(255,255,255,.06)':'none'};display:flex;align-items:center;justify-content:center;gap:4px;${isOut?'cursor:not-allowed;':''}" ${isOut?'disabled':''}>
+            <iconify-icon icon="${isOut?'mdi:close-circle-outline':'mdi:shopping'}" style="font-size:11px;"></iconify-icon>${isOut?'Habis':'Beli'}
+          </button>
+        </div>
+      </div>`;
+    }).join('');
+    // drag scroll
+    let down=false,sx,sl;
+    track.addEventListener('mousedown',e=>{down=true;track.style.cursor='grabbing';sx=e.pageX-track.offsetLeft;sl=track.scrollLeft;e.preventDefault();});
+    track.addEventListener('mouseleave',()=>{down=false;track.style.cursor='';});
+    track.addEventListener('mouseup',()=>{down=false;track.style.cursor='';});
+    track.addEventListener('mousemove',e=>{if(!down)return;track.scrollLeft=sl-(e.pageX-track.offsetLeft-sx)*1.2;});
+  }catch(e){track.innerHTML='';}
+}
+
+document.addEventListener('DOMContentLoaded',loadPopular);
+
+/* Notifikasi pembelian user lain */
+(function(){
+  const names=['Rizky','Andi','Dimas','Farhan','Wanda','Putra','Bintang','Kevin','Abil','Hergi','Rehan','Dwi','Yoga','Fajar','Indra','Naufal','Aldi','Salsa','Sinta','Reza'];
+  const cities=['Jakarta','Bandung','Surabaya','Medan','Semarang','Makassar','Bekasi','Tangerang','Depok','Bogor','Yogyakarta','Palembang'];
+  const toast=document.getElementById('purchase-toast');
+  if(!toast)return;
+  const textEl=document.getElementById('pt-text');
+  const timeEl=toast.querySelector('#pt-time span');
+  const avatarEl=document.getElementById('pt-avatar');
+  let products=[];
+  try{products=<%- JSON.stringify(popularProducts) %>;}catch(e){products=[];}
+  let hideTimer=null, cycleTimer=null, dismissed=false;
+
+  function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+
+  function showToast(){
+    if(dismissed||!products.length)return;
+    const p=pick(products);
+    const name=pick(names);
+    const city=pick(cities);
+    const mins=Math.floor(Math.random()*28)+1;
+    avatarEl.textContent=name.charAt(0).toUpperCase();
+    textEl.innerHTML=`<strong style="color:#fff;">${name}</strong> dari ${city} baru saja membeli <strong style="color:#60a5fa;">${p.name}</strong>`;
+    timeEl.textContent=mins<=1?'Baru saja':`${mins} menit yang lalu`;
+    toast.style.transform='translateY(0)';
+    toast.style.opacity='1';
+    clearTimeout(hideTimer);
+    hideTimer=setTimeout(hidePurchaseToast,5000);
+  }
+
+  window.hidePurchaseToast=function(){
+    toast.style.transform='translateY(140%)';
+    toast.style.opacity='0';
+  };
+
+  function loop(){
+    showToast();
+    cycleTimer=setTimeout(loop,Math.floor(Math.random()*5000)+8000);
+  }
+  setTimeout(loop,4000);
+})();
+
+</script>
