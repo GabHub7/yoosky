@@ -1,0 +1,80 @@
+<%
+const pageTitle = 'Admin Access';
+%>
+
+<style>
+body.auth-page { background: var(--bg-main); }
+</style>
+
+<script>document.body.classList.add('auth-page');</script>
+
+<div class="min-h-screen flex items-center justify-center px-4" style="background:linear-gradient(135deg,var(--bg-main) 0%,var(--bg-darker) 100%);">
+    <div class="w-full max-w-sm">
+        <!-- Logo -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+                 style="background:linear-gradient(135deg,rgba(234,88,12,.2),rgba(249,115,22,.12));border:1px solid rgba(234,88,12,.4);">
+                <iconify-icon icon="mdi:shield-crown" style="font-size:32px;color:#fb923c;"></iconify-icon>
+            </div>
+            <h1 class="text-xl font-bold text-white font-bold">Admin Panel</h1>
+            <p class="text-xs mt-1" style="color:var(--text-slate);">Akses terbatas — hanya untuk administrator</p>
+        </div>
+
+        <!-- Card -->
+        <div class="rounded-2xl p-6" style="background:var(--bg-card);border:1px solid rgba(234,88,12,.2);">
+            <% if (typeof error !== 'undefined' && error) { %>
+            <div class="flex items-center gap-2 p-3 rounded-xl mb-4 text-xs"
+                 style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171;">
+                <iconify-icon icon="mdi:alert-circle" class="text-sm flex-shrink-0"></iconify-icon>
+                <%= error %>
+            </div>
+            <% } %>
+
+            <% if (typeof lockedInfo !== 'undefined' && lockedInfo) { %>
+            <div class="p-3 rounded-xl mb-4 text-xs" style="background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);color:#fbbf24;">
+                <div class="flex items-center gap-2 mb-1">
+                    <iconify-icon icon="mdi:devices" class="text-sm flex-shrink-0"></iconify-icon>
+                    <span class="font-bold">Panel admin sedang dipakai perangkat lain</span>
+                </div>
+                <div class="text-zinc-400">
+                    Device: <span class="text-zinc-200"><%= lockedInfo.device %></span> ·
+                    Aktif terakhir <span class="text-zinc-200"><%= lockedInfo.minutesAgo %> menit lalu</span>
+                </div>
+                <p class="mt-1.5 text-[11px] text-zinc-500">Hanya 1 perangkat yang boleh login admin sekaligus, supaya data produk tidak saling tertimpa. Centang di bawah kalau Anda yakin ingin mengambil alih sesi tersebut (perangkat lain otomatis logout).</p>
+            </div>
+            <% } %>
+
+            <form method="POST" action="/vpr-secure-panel-8x">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold mb-1.5" style="color:var(--text-desc);">Username Admin</label>
+                        <input type="text" name="username" placeholder="Username" value="<%= typeof username !== 'undefined' ? username : '' %>"
+                               class="hm-input" autocomplete="off" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1.5" style="color:var(--text-desc);">Password</label>
+                        <input type="password" name="password" placeholder="••••••••"
+                               class="hm-input" required>
+                    </div>
+                    <% if (typeof lockedInfo !== 'undefined' && lockedInfo) { %>
+                    <label class="flex items-center gap-2 text-xs cursor-pointer" style="color:var(--text-desc);">
+                        <input type="checkbox" name="forceTakeover" value="1" class="w-4 h-4">
+                        Ambil alih sesi ini, logout paksa perangkat lain
+                    </label>
+                    <% } %>
+                    <button type="submit" class="w-full py-3 rounded-xl font-bold text-sm text-white transition-all hover:opacity-90"
+                            style="background:linear-gradient(135deg,rgba(234,88,12,.8),rgba(249,115,22,.8));border:1px solid rgba(234,88,12,.5);">
+                        <iconify-icon icon="mdi:lock-open-outline" class="mr-1"></iconify-icon>
+                        Masuk ke Panel Admin
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="text-center mt-4">
+            <a href="/" class="text-xs hover:text-white transition-colors" style="color:var(--text-slate);">
+                ← Kembali ke Beranda
+            </a>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Environment variables — JANGAN PERNAH commit secret asli
+.env
+.env.local
+.env.new
+.env.production
+
+# Local DB fallback cache
+database/
+
+# Uploads yang di-generate saat runtime (bukan asset default)
+public/uploads/products/
+public/uploads/avatars/*
+!public/uploads/avatars/.gitkeep
+
+# Backup hasil script backup-supabase.js — berisi seluruh data user & transaksi
+backup-*/
+
+# MCP / editor-local config — bukan bagian dari deployment, spesifik ke mesin developer
+.mcp.json
+
+# OS/editor junk
+.DS_Store
+*.log

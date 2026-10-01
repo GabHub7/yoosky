@@ -1,0 +1,98 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  YOOSKY STORE — PANDUAN SETUP LENGKAP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1 — SUPABASE SCHEMA (wajib, sekali saja)
+─────────────────────────────────────────────
+1. Buka: https://supabase.com/dashboard → project kamu
+2. Klik "SQL Editor" → "New Query"
+3. Copy-paste isi file: supabase-schema.sql
+4. Klik "Run"
+
+STEP 2 — ENV VARIABLES DI VERCEL
+─────────────────────────────────
+Set ini di Vercel Dashboard → Settings → Environment Variables:
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  WAJIB (tanpa ini website tidak jalan)                          │
+  ├──────────────────────────────┬──────────────────────────────────┤
+  │  SUPABASE_URL                │ https://xxxx.supabase.co         │
+  │  SUPABASE_SERVICE_ROLE_KEY   │ eyJxx... (service role, bukan    │
+  │                              │ anon key!)                       │
+  │  SESSION_SECRET              │ string random panjang, bebas     │
+  │  INITIAL_ADMIN_USERNAME      │ Abdurahman Mulvi                 │
+  │  INITIAL_ADMIN_PASSWORD      │ Tarakan11#                       │
+  ├──────────────────────────────┴──────────────────────────────────┤
+  │  OPSIONAL (fitur tambahan)                                      │
+  ├──────────────────────────────┬──────────────────────────────────┤
+  │  SUPABASE_ANON_KEY           │ eyJxx... (anon key, opsional)    │
+  │  TURNSTILE_SITE_KEY          │ dari Cloudflare Turnstile        │
+  │  TURNSTILE_SECRET_KEY        │ dari Cloudflare Turnstile        │
+  │  PORT                        │ default 3000 (tidak perlu diset  │
+  │                              │ di Vercel)                       │
+  └──────────────────────────────┴──────────────────────────────────┘
+
+  Cara dapat SUPABASE_SERVICE_ROLE_KEY:
+  → Supabase Dashboard → Project → Settings → API → service_role key
+
+  Cara dapat TURNSTILE keys (opsional, untuk proteksi login):
+  → https://dash.cloudflare.com → Turnstile → Add site
+  → Site Key  = TURNSTILE_SITE_KEY
+  → Secret Key = TURNSTILE_SECRET_KEY
+
+STEP 3 — PUSH SETTINGS + LOGO KE SUPABASE (WAJIB!)
+────────────────────────────────────────────────────
+Jalankan SEKALI dari komputer lokal (bukan Vercel):
+
+  1. Buat file .env berisi env variables di atas
+  2. Jalankan: npm install
+  3. Jalankan: node seed-settings.js
+
+Output yang benar:
+  ✅ Logo diupload ke Supabase Storage: https://...
+  ✅ BERHASIL disimpan ke Supabase!
+  │ adminUsername: rei
+  │ hash verify  : ✅ OK
+
+STEP 4 — DEPLOY KE VERCEL
+──────────────────────────
+  vercel --prod
+  (atau push ke GitHub, Vercel auto-deploy)
+
+STEP 5 — LOGIN ADMIN
+─────────────────────
+  URL      : https://<nama-project>.vercel.app/admin-login
+  Username : Abdurahman Mulvi
+  Password : Tarakan11#
+
+STEP 6 — UPLOAD BANNER (dari Admin Panel)
+──────────────────────────────────────────
+  Admin → Banner → Upload gambar banner YOOSKY STORE → Save
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  GANTI CREDENTIALS (kapanpun)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Edit seed-settings.js bagian:
+  ADMIN_USERNAME = 'Abdurahman Mulvi'
+  ADMIN_PASSWORD = 'Tarakan11#'
+Lalu jalankan: node seed-settings.js
+
+ATAU dari Admin Panel → Settings → Kredensial Admin
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ Admin login tidak bisa masuk
+   → Jalankan: node seed-settings.js
+   → Pastikan output "hash verify : ✅ OK"
+
+❌ Logo tidak muncul
+   → Jalankan: node seed-settings.js (upload logo ke Supabase Storage)
+   → Atau set logoUrl manual di Admin → Settings → URL Logo
+
+❌ Banner tidak muncul
+   → Masuk Admin → Banner → Upload banner baru
+   → Banner yang diupload otomatis tersimpan di Supabase Storage
+
+❌ Error "relation keyvalue_store does not exist"
+   → Jalankan ulang supabase-schema.sql di SQL Editor Supabase
