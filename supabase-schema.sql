@@ -31,6 +31,7 @@ INSERT INTO keyvalue_store (key, value) VALUES
   ('notifications.json','[]'::jsonb),
   ('keyspool.json',     '[]'::jsonb),
   ('vouchers.json',     '[]'::jsonb),
+  ('restocks.json',     '[]'::jsonb),
   ('settings.json',     '{}'::jsonb),
   ('admin-lock.json',   '{}'::jsonb)
 ON CONFLICT (key) DO NOTHING;

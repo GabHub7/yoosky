@@ -98,7 +98,7 @@ const pageTitle = 'Cek Pesanan';
                                     <span class="text-xs text-zinc-400 block mb-2">Key/Lisensi:</span>
                                     <div class="p-3 rounded-lg bg-black/30 border border-emerald-500/30">
                                         <code id="keyDisplay" class="text-sm text-emerald-400 font-mono break-all font-black">
-                                            <%= transaction.key %><% if (transaction.selectedDays) { %> — <%= transaction.selectedDays %> Hari<% } %>
+                                            <%= transaction.key %><% if (transaction.selectedDays) { %> — <%= dur.human(transaction.selectedDays, transaction.selectedUnit) %><% } %>
                                         </code>
                                     </div>
                                     <button onclick="copyKey()" id="copyKeyBtn"
@@ -109,7 +109,7 @@ const pageTitle = 'Cek Pesanan';
                                     </button>
                                     <script>
                                     function copyKey() {
-                                        const raw = `<%= transaction.key %><% if (transaction.selectedDays) { %> — <%= transaction.selectedDays %> Hari<% } %>`;
+                                        const raw = `<%= transaction.key %><% if (transaction.selectedDays) { %> — <%= dur.human(transaction.selectedDays, transaction.selectedUnit) %><% } %>`;
                                         navigator.clipboard.writeText(raw).then(() => {
                                             const btn = document.getElementById('copyKeyBtn');
                                             const txt = document.getElementById('copyBtnText');

@@ -88,7 +88,7 @@ const pageTitle = 'Edit Produk';
       class="w-full py-2.5 rounded-xl text-xs font-bold text-blue-400 border border-dashed border-blue-500/30 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1.5">
       <iconify-icon icon="mdi:plus-circle" class="text-sm"></iconify-icon> Tambah Paket
     </button>
-    <p class="text-[10px] text-zinc-600 mt-2">Contoh: 7 hari → Rp 15.000 | 30 hari → Rp 50.000</p>
+    <p class="text-[10px] text-zinc-600 mt-2">Contoh: 12 jam → Rp 5.000 | 7 hari → Rp 15.000 | 30 hari → Rp 50.000</p>
     <p class="text-[10px] text-zinc-600 mt-1">Harga Reseller kosong = ikut diskon % global dari setting Reseller VIP</p>
 
   </div>
@@ -115,9 +115,9 @@ const pageTitle = 'Edit Produk';
         </div>
       </div>
       <textarea id="keysInput" class="hm-input font-mono text-xs resize-none" rows="6"
-        placeholder="Masukkan keys, satu per baris&#10;Contoh:&#10;FF7-001:7&#10;FF30-001:30&#10;ML7-001:7"></textarea>
+        placeholder="Masukkan keys, satu per baris&#10;Contoh:&#10;FF7-001:7&#10;FF30-001:30&#10;FF12J-001:12h&#10;ML7-001:7"></textarea>
       <p class="text-[10px] text-zinc-600 mt-1.5">
-        Format tag durasi: <code class="text-blue-400">KEY:HARI</code> (misal <code class="text-blue-400">FF7-001:7</code> untuk paket 7 hari)
+        Format tag durasi: <code class="text-blue-400">KEY:HARI</code> (misal <code class="text-blue-400">FF7-001:7</code> = paket 7 hari) atau <code class="text-blue-400">KEY:JAMh</code> (misal <code class="text-blue-400">FF12-001:12h</code> = paket 12 jam)
       </p>
     </div>
 
@@ -153,6 +153,22 @@ let keysMode = 'append';
 let selectedPlatforms = [];
 let pricingOptions = [];
 
+// ─── Helper durasi (hari/jam) — sama dengan duration.js di server ───
+const normUnit = u => /^(h|hr|hrs|hour|hours|jam)$/i.test(String(u || '').trim()) ? 'hour' : 'day';
+function labelDur(label) {
+  const m = String(label || '').match(/(\d+)\s*(DAYS?|HARI|HOURS?|JAM)\b/i);
+  return m ? { value: parseInt(m[1]), unit: normUnit(m[2]) } : null;
+}
+function keyTag(k) {
+  const m = String(k).match(/^(.*):(\d+)([dh])?$/i);
+  return m ? { value: parseInt(m[2]), unit: (m[3] && m[3].toLowerCase() === 'h') ? 'hour' : 'day' } : null;
+}
+function countStock(keys, value, unit) {
+  const tagged = keys.filter(k => { const t = keyTag(k); return t && t.value === value && t.unit === unit; }).length;
+  const generic = keys.filter(k => !k.includes(':')).length;
+  return tagged > 0 ? tagged : generic;
+}
+
 // ─── Load produk ───
 async function loadProduct() {
   const id = new URLSearchParams(location.search).get('id');
@@ -182,14 +198,16 @@ async function loadProduct() {
   if (currentProduct.pricingOptions && currentProduct.pricingOptions.length > 0) {
     pricingOptions = currentProduct.pricingOptions.map(o => ({
       days: o.days,
+      unit: normUnit(o.unit),
       price: o.price,
       reseller_price: (o.reseller_price != null && o.reseller_price !== '') ? o.reseller_price : null
     }));
   } else if (currentProduct.items && currentProduct.items.length > 0) {
     pricingOptions = currentProduct.items.map(item => {
-      const m = (item.l || '').match(/(\d+)\s+DAYS/i);
+      const m = labelDur(item.l);
       return {
-        days: m ? parseInt(m[1]) : 0,
+        days: m ? m.value : 0,
+        unit: m ? m.unit : 'day',
         price: item.p || 0,
         reseller_price: (item.reseller_price != null && item.reseller_price !== '') ? item.reseller_price : null
       };
@@ -278,10 +296,14 @@ function renderPricingRows() {
     <div class="p-3 rounded-xl" style="background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.2)">
       <div class="flex gap-2 items-center">
         <div class="flex-1 flex gap-2 items-center">
-          <input type="number" value="${opt.days}" min="1" placeholder="Hari"
+          <input type="number" value="${opt.days}" min="1" placeholder="Durasi"
             class="hm-input text-sm text-center font-bold" style="width:70px"
             oninput="if(this.value!=='')pricingOptions[${i}].days=parseInt(this.value)||0">
-          <span class="text-zinc-500 text-xs shrink-0">hari</span>
+          <select class="hm-input text-xs" style="width:72px;padding-left:8px;padding-right:4px"
+            onchange="pricingOptions[${i}].unit=this.value">
+            <option value="day" ${opt.unit === 'hour' ? '' : 'selected'}>Hari</option>
+            <option value="hour" ${opt.unit === 'hour' ? 'selected' : ''}>Jam</option>
+          </select>
           <div class="flex-1 relative">
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-xs font-bold">Rp</span>
             <input type="number" value="${opt.price}" min="0" step="1000" placeholder="Harga Normal"
@@ -304,7 +326,7 @@ function renderPricingRows() {
 }
 
 function addPricingRow() {
-  pricingOptions.push({ days: 7, price: 0, reseller_price: null });
+  pricingOptions.push({ days: 7, unit: 'day', price: 0, reseller_price: null });
   renderPricingRows();
 }
 
@@ -334,16 +356,8 @@ function renderKeyInfo() {
 
   // Stok per item
   const stockHtml = (p.items || []).map(item => {
-    const m = (item.l || '').match(/(\d+)\s+DAYS/i);
-    const days = m ? parseInt(m[1]) : null;
-    let stok;
-    if (days) {
-      const tagged = keys.filter(k => { const pts = k.split(':'); return pts.length > 1 && parseInt(pts[pts.length-1]) === days; }).length;
-      const generic = keys.filter(k => !k.includes(':')).length;
-      stok = tagged > 0 ? tagged : generic;
-    } else {
-      stok = keys.filter(k => !k.includes(':')).length;
-    }
+    const pd = labelDur(item.l);
+    const stok = pd ? countStock(keys, pd.value, pd.unit) : keys.filter(k => !k.includes(':')).length;
     const color = stok === 0 ? 'text-red-400 border-red-500/30 bg-red-500/10' : stok < 5 ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' : 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
     return `<div class="flex items-center justify-between p-3 rounded-xl border ${color}">
       <span class="text-xs font-bold text-white">${item.l}</span>
@@ -392,7 +406,7 @@ async function saveProduct() {
   }
   const zeroPriced = validPricing.filter(o => !o.price || o.price <= 0);
   if (zeroPriced.length > 0) {
-    showToast(`Harga paket ${zeroPriced.map(o=>o.days+'hari').join(', ')} masih 0/kosong. Cek lagi sebelum simpan.`, 'error');
+    showToast(`Harga paket ${zeroPriced.map(o=>o.days+(o.unit==='hour'?' jam':' hari')).join(', ')} masih 0/kosong. Cek lagi sebelum simpan.`, 'error');
     return;
   }
 

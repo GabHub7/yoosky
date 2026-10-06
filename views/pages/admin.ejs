@@ -295,8 +295,9 @@ textarea.hm-input{resize:vertical;min-height:80px;}
                     <span><%= p.sold||0 %> terjual</span>
                     <span class="text-zinc-500 flex items-center gap-1 flex-wrap">
                         <% pricing.forEach(po => { %>
-                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold <%= (p.keys||[]).filter(k => k.endsWith(':'+po.days)).length > 0 ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-600 bg-zinc-800/50' %>">
-                            <%= po.days %>d: <%= (p.keys||[]).filter(k => k.endsWith(':'+po.days)).length %>
+                        <% const poCnt = dur.countTagged(p.keys, po.days, po.unit); %>
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold <%= poCnt > 0 ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-600 bg-zinc-800/50' %>">
+                            <%= po.days %><%= dur.normUnit(po.unit)==='hour' ? 'j' : 'd' %>: <%= poCnt %>
                         </span>
                         <% }) %>
                         <% const genericCnt = (p.keys||[]).filter(k => !k.includes(':')).length; if (genericCnt > 0) { %>
@@ -545,6 +546,60 @@ textarea.hm-input{resize:vertical;min-height:80px;}
             <iconify-icon icon="mdi:loading" class="text-xl text-blue-400 animate-spin block mx-auto mb-2"></iconify-icon>
             Memuat...
         </div>
+    </div>
+</div>
+
+<!-- ── RESTOCK KEY (YouduStore API) ── -->
+<div id="pane-restock" class="tab-pane">
+    <div class="flex items-center justify-between mb-4">
+        <div class="section-label mb-0">Restock Key via YouduStore</div>
+        <span class="text-[10px] text-zinc-600" id="rsBalanceLabel">—</span>
+    </div>
+
+    <!-- Kredensial -->
+    <div class="neon-card p-4 mb-4">
+        <div class="text-xs font-bold text-blue-400 mb-3 flex items-center gap-2">
+            <iconify-icon icon="mdi:api" class="text-base"></iconify-icon> Koneksi API YouduStore
+        </div>
+        <div class="grid grid-cols-1 gap-2 mb-2">
+            <div>
+                <div class="setting-row-label">User API Token <span class="text-zinc-600 font-normal" id="rsTokenHint"></span></div>
+                <input type="password" id="rsToken" class="hm-input font-mono text-xs" placeholder="kosongkan = tidak diubah" autocomplete="off">
+            </div>
+            <div>
+                <div class="setting-row-label">Global Access Key (X-API-KEY) <span class="text-zinc-600 font-normal" id="rsKeyHint"></span></div>
+                <input type="password" id="rsApiKey" class="hm-input font-mono text-xs" placeholder="kosongkan = tidak diubah" autocomplete="off">
+            </div>
+        </div>
+        <label class="flex items-center gap-2 text-[11px] text-zinc-400 mb-3 cursor-pointer">
+            <input type="checkbox" id="rsSandbox" class="accent-indigo-500"> Mode sandbox <span class="text-zinc-600">(tidak memotong saldo; key sandbox TIDAK dimasukkan ke stok)</span>
+        </label>
+        <div class="flex gap-2">
+            <button onclick="rsSaveSettings()" class="btn-primary flex-1 justify-center"><iconify-icon icon="mdi:content-save"></iconify-icon> Simpan</button>
+            <button onclick="rsTest()" class="flex-1 py-2 rounded-xl text-xs font-bold text-zinc-300 border border-white/10 bg-white/3 hover:bg-white/8 transition-all flex items-center justify-center gap-1.5"><iconify-icon icon="mdi:wallet"></iconify-icon> Cek Saldo</button>
+        </div>
+        <div id="rsTestResult" class="hidden text-[11px] p-2.5 rounded-lg mt-2"></div>
+        <div class="mt-3 p-3 rounded-xl bg-blue-500/8 border border-blue-500/20 text-[11px] text-blue-300">
+            <div class="font-bold mb-1">Callback URL (otomatis dikirim ke supplier saat order dipesan):</div>
+            <code class="break-all text-blue-200" id="rsCallbackUrl">—</code>
+        </div>
+    </div>
+
+    <!-- Restock per paket -->
+    <div class="flex items-center justify-between mb-2">
+        <div class="section-label mb-0">Paket Produk</div>
+        <button onclick="rsLoadSupplier(true)" class="text-[10px] text-blue-400 hover:text-blue-300"><iconify-icon icon="mdi:refresh" class="align-middle"></iconify-icon> Muat produk supplier</button>
+    </div>
+    <p class="text-[10px] text-zinc-600 mb-2">Petakan tiap paket ke kode produk supplier (<code class="text-blue-400">code</code> dari daftar produk API), lalu klik Restock. <span id="rsSupplierCount"></span> Serial number yang sukses otomatis jadi key paket tsb. Maks <span id="rsMaxBatch">10</span> key per klik.</p>
+    <datalist id="rsSupplierList"></datalist>
+    <div class="space-y-2.5 mb-5" id="rsPackages">
+        <div class="text-center py-6 text-zinc-600 text-xs">Memuat...</div>
+    </div>
+
+    <!-- Riwayat -->
+    <div class="section-label">Riwayat Restock</div>
+    <div class="space-y-2" id="rsHistory">
+        <div class="text-center py-4 text-zinc-600 text-xs">—</div>
     </div>
 </div>
 
@@ -812,7 +867,7 @@ textarea.hm-input{resize:vertical;min-height:80px;}
         <!-- PakKasir API -->
         <div id="sectionApi" class="<%= (settings.qrisMode||'static')==='api' ? '' : 'hidden' %> space-y-3">
             <div class="p-3 rounded-xl bg-red-500/8 border border-red-500/20 text-[11px] text-red-400 mb-2">
-                <iconify-icon icon="mdi:alert"></iconify-icon> Pastikan API key dan URL yang dimasukkan sudah benar. Test koneksi sebelum menyimpan.
+                <iconify-icon icon="mdi:alert"></iconify-icon> Pakai Pakasir API v2 (v1 dihentikan 20 Okt 2026). Isi API key + slug project, lalu test koneksi sebelum menyimpan.
             </div>
             <form id="pakasirForm" class="space-y-3">
                 <div>
@@ -820,12 +875,24 @@ textarea.hm-input{resize:vertical;min-height:80px;}
                     <input type="text" name="apiKey" value="<%= settings.pakasir?.apiKey||'' %>" class="hm-input font-mono text-xs" placeholder="masukkan API key PakKasir">
                 </div>
                 <div>
-                    <div class="setting-row-label">Project Name</div>
-                    <input type="text" name="project" value="<%= settings.pakasir?.project||'' %>" class="hm-input" placeholder="nama project kamu">
+                    <div class="setting-row-label">Slug Project <span class="text-zinc-600 font-normal">(API v2)</span></div>
+                    <input type="text" name="project" value="<%= settings.pakasir?.project||'' %>" class="hm-input" placeholder="slug project di dashboard Pakasir">
                 </div>
                 <div>
-                    <div class="setting-row-label">API Base URL <span class="text-zinc-600 font-normal">(hostname, tanpa https://)</span></div>
-                    <input type="text" name="apiBaseUrl" value="<%= settings.pakasir?.apiBaseUrl||'api.pakasir.com' %>" class="hm-input font-mono text-xs" placeholder="api.pakasir.com">
+                    <div class="setting-row-label">Webhook Secret <span class="text-zinc-600 font-normal">(header X-Secret, opsional tapi disarankan)</span></div>
+                    <input type="text" name="webhookSecret" value="<%= settings.pakasir?.webhookSecret||'' %>" class="hm-input font-mono text-xs" placeholder="ambil dari halaman detail proyek Pakasir">
+                </div>
+                <div>
+                    <div class="setting-row-label">Mode</div>
+                    <select name="mode" class="hm-input text-xs">
+                        <option value="production" <%= (settings.pakasir?.mode||'production')==='production' ? 'selected' : '' %>>Production (transaksi sandbox ditolak)</option>
+                        <option value="sandbox" <%= settings.pakasir?.mode==='sandbox' ? 'selected' : '' %>>Sandbox (untuk uji coba)</option>
+                    </select>
+                </div>
+                <div class="p-3 rounded-xl bg-blue-500/8 border border-blue-500/20 text-[11px] text-blue-300">
+                    <div class="font-bold mb-1">Webhook URL (isi di dashboard Pakasir):</div>
+                    <code class="break-all text-blue-200" id="pakasirWebhookUrl"></code>
+                    <div class="text-zinc-500 mt-1">Pembayaran juga tetap dicek otomatis lewat polling halaman pembayaran, jadi webhook bersifat tambahan (lebih cepat &amp; tahan tab ditutup).</div>
                 </div>
                 <button type="button" onclick="testPakasir()" class="w-full py-2 rounded-xl text-xs font-bold text-zinc-400 border border-white/10 bg-white/3 hover:bg-white/8 transition-all flex items-center justify-center gap-1.5">
                     <iconify-icon icon="mdi:wifi-check"></iconify-icon> Test Koneksi API
@@ -956,6 +1023,10 @@ textarea.hm-input{resize:vertical;min-height:80px;}
         <iconify-icon icon="mdi:key-chain" class="n-icon"></iconify-icon>
         <span class="n-label">Keys</span>
     </div>
+    <div class="nav-btn" id="nav-restock" onclick="switchTab('restock')">
+        <iconify-icon icon="mdi:package-down" class="n-icon"></iconify-icon>
+        <span class="n-label">Restock</span>
+    </div>
     <div class="nav-btn" id="nav-vouchers" onclick="switchTab('vouchers')">
         <iconify-icon icon="mdi:ticket-percent" class="n-icon"></iconify-icon>
         <span class="n-label">Voucher</span>
@@ -1016,14 +1087,14 @@ textarea.hm-input{resize:vertical;min-height:80px;}
                     </div>
                     <div id="pricingRows" class="space-y-2">
                         <div class="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-zinc-600 px-0.5">
-                            <div style="flex:0 0 72px">Hari</div>
+                            <div style="flex:0 0 138px">Durasi</div>
                             <div class="flex-1">Harga Normal</div>
                             <div class="flex-1">Harga Reseller <span class="normal-case font-normal text-zinc-700">(kosong = pakai %)</span></div>
                             <div style="width:32px"></div>
                         </div>
                         <!-- rows injected by JS -->
                     </div>
-                    <p class="text-[10px] text-zinc-600 mt-1">Key format: <code class="text-blue-400">KEY123</code> (generic) atau <code class="text-blue-400">KEY123:7</code> (khusus 7 hari)</p>
+                    <p class="text-[10px] text-zinc-600 mt-1">Key format: <code class="text-blue-400">KEY123</code> (generic), <code class="text-blue-400">KEY123:7</code> (khusus 7 hari), <code class="text-blue-400">KEY123:12h</code> (khusus 12 jam)</p>
                 </div>
 
                 <!-- STATUS -->
@@ -1042,7 +1113,7 @@ textarea.hm-input{resize:vertical;min-height:80px;}
                         <span id="prodKeyCount" class="text-[10px] text-zinc-500"></span>
                     </div>
                     <textarea name="keys" id="prodKeys" rows="5" class="hm-input font-mono text-xs"
-                        placeholder="KEY-FF-001&#10;KEY-FF-002:7&#10;KEY-FF-003:30&#10;&#10;Kosongkan = tidak ubah keys (mode edit)"></textarea>
+                        placeholder="KEY-FF-001&#10;KEY-FF-002:7&#10;KEY-FF-003:30&#10;KEY-FF-004:12h&#10;&#10;Kosongkan = tidak ubah keys (mode edit)"></textarea>
                     <div class="flex gap-2 mt-1" id="keysModeRow">
                         <label class="flex items-center gap-1 text-[11px] text-zinc-400 cursor-pointer">
                             <input type="radio" name="keysMode" value="append" checked class="accent-indigo-500"> Tambah ke stok existing
@@ -1088,7 +1159,7 @@ textarea.hm-input{resize:vertical;min-height:80px;}
                 <div>
                     <div class="setting-row-label">Keys Baru (satu baris = satu key)</div>
                     <textarea id="keysTextarea" rows="8" class="hm-input font-mono text-xs"
-                        placeholder="KEY-FF-001&#10;KEY-FF-002:7&#10;KEY-FF-003:30&#10;&#10;Format KEY:HARI untuk duration-specific"></textarea>
+                        placeholder="KEY-FF-001&#10;KEY-FF-002:7&#10;KEY-FF-003:30&#10;&#10;Format KEY:HARI atau KEY:JAMh (mis. KEY:12h) untuk duration-specific"></textarea>
                 </div>
                 <div class="flex gap-3">
                     <label class="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
@@ -1278,12 +1349,13 @@ function switchTab(name) {
     if (name === 'testimonials') loadTestimonials();
     if (name === 'keys') loadKeys();
     if (name === 'vouchers') loadVouchers();
+    if (name === 'restock') rsLoad();
     history.replaceState(null, '', '/admin#' + name);
 }
 
 // ── HASH ROUTING: auto switch tab dari URL hash ──
 document.addEventListener('DOMContentLoaded', () => {
-    const validTabs = ['dashboard','products','transactions','users','testimonials','settings','keys','vouchers'];
+    const validTabs = ['dashboard','products','transactions','users','testimonials','settings','keys','vouchers','restock'];
     const hash = window.location.hash.replace('#', '');
     if (validTabs.includes(hash)) switchTab(hash);
 });
@@ -1308,15 +1380,19 @@ async function api(url, data) {
 
 // ── PRODUK: Pricing rows ──
 let pricingRowCount = 0;
-function addPricingRow(days='', price='', resellerPrice='') {
+function addPricingRow(days='', price='', resellerPrice='', unit='day') {
     const i = pricingRowCount++;
     const row = document.createElement('div');
     row.className = 'flex items-center gap-2';
     row.innerHTML = `
         <div class="flex-1 flex gap-2">
-            <div style="flex:0 0 72px">
+            <div style="flex:0 0 138px;display:flex;gap:4px">
                 <input type="number" name="pricingDays" value="${days}" min="1" required
-                    class="hm-input text-xs" placeholder="Hari">
+                    class="hm-input text-xs" style="width:62px;padding-left:8px;padding-right:6px" placeholder="Durasi">
+                <select name="pricingUnits" class="hm-input text-xs" style="width:72px;padding-left:8px;padding-right:4px">
+                    <option value="day" ${unit==='hour'?'':'selected'}>Hari</option>
+                    <option value="hour" ${unit==='hour'?'selected':''}>Jam</option>
+                </select>
             </div>
             <div class="flex-1">
                 <input type="number" name="pricingPrices" value="${price}" min="0" required
@@ -1365,7 +1441,7 @@ function openEditProductModal(id, name, category, description, imageUrl, pricing
     // Pricing
     document.getElementById('pricingRows').innerHTML = '';
     pricingRowCount = 0;
-    if (pricing && pricing.length) { pricing.forEach(o => addPricingRow(o.days, o.price, o.reseller_price || '')); }
+    if (pricing && pricing.length) { pricing.forEach(o => addPricingRow(o.days, o.price, o.reseller_price || '', o.unit || 'day')); }
     else addPricingRow('7','60000');
     openModal('modal-product');
 }
@@ -1552,6 +1628,176 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
     else toast(d.message, 'error');
 });
 
+// ── RESTOCK KEY (YouduStore) ──
+let rsState = null, rsSupplier = [];
+const rsEsc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rsRp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
+
+function rsBox(el, kind, text) {
+    const cls = { ok: 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300', err: 'bg-red-500/10 border border-red-500/20 text-red-400', info: 'bg-blue-500/10 border border-blue-500/20 text-blue-300' };
+    el.className = 'text-[11px] p-2.5 rounded-lg mt-2 ' + cls[kind];
+    el.textContent = text;
+}
+
+async function rsLoad() {
+    const r = await fetch('/admin/restock/data');
+    const d = await r.json();
+    if (!d.success) { toast(d.message || 'Gagal memuat restock', 'error'); return; }
+    rsState = d;
+    document.getElementById('rsTokenHint').textContent = d.tokenHint ? '(tersimpan ' + d.tokenHint + ')' : '(belum diisi)';
+    document.getElementById('rsKeyHint').textContent = d.apiKeyHint ? '(tersimpan ' + d.apiKeyHint + ')' : '(belum diisi)';
+    document.getElementById('rsSandbox').checked = !!d.sandbox;
+    document.getElementById('rsCallbackUrl').textContent = d.callbackUrl;
+    document.getElementById('rsMaxBatch').textContent = d.maxBatch;
+    rsRenderPackages();
+    rsRenderHistory();
+    if (d.configured && !rsSupplier.length) rsLoadSupplier(false);
+}
+
+async function rsSaveSettings() {
+    const d = await api('/admin/restock/settings', {
+        token: document.getElementById('rsToken').value,
+        apiKey: document.getElementById('rsApiKey').value,
+        sandbox: document.getElementById('rsSandbox').checked
+    });
+    if (d.success) {
+        toast('Pengaturan YouduStore disimpan', 'success');
+        document.getElementById('rsToken').value = ''; document.getElementById('rsApiKey').value = '';
+        rsLoad();
+    } else toast(d.message || 'Gagal menyimpan', 'error');
+}
+
+async function rsTest() {
+    const el = document.getElementById('rsTestResult');
+    rsBox(el, 'info', 'Mengecek saldo...'); el.classList.remove('hidden');
+    const d = await api('/admin/restock/test', {});
+    if (d.success) {
+        rsBox(el, 'ok', `✓ Terhubung: ${d.name || '-'} (${d.membership || '-'}) — saldo ${rsRp(d.balance)}`);
+        document.getElementById('rsBalanceLabel').textContent = 'Saldo supplier: ' + rsRp(d.balance);
+    } else rsBox(el, 'err', '✗ ' + (d.message || 'Gagal'));
+}
+
+async function rsLoadSupplier(refresh) {
+    try {
+        const r = await fetch('/admin/restock/supplier-products' + (refresh ? '?refresh=1' : ''));
+        const d = await r.json();
+        if (!d.success) { if (refresh) toast(d.message || 'Gagal memuat produk supplier', 'error'); return; }
+        rsSupplier = d.data || [];
+        document.getElementById('rsSupplierList').innerHTML = rsSupplier.map(p =>
+            `<option value="${rsEsc(p.code)}">${rsEsc(p.serviceName)} — ${rsEsc(p.category)} — ${rsRp(p.price)}${p.status && p.status !== 'active' ? ' (' + rsEsc(p.status) + ')' : ''}</option>`).join('');
+        document.getElementById('rsSupplierCount').textContent = `(${rsSupplier.length} produk supplier dimuat)`;
+        if (refresh) toast(`${rsSupplier.length} produk supplier dimuat`, 'success');
+        rsRenderPackages();
+    } catch (e) { if (refresh) toast('Gagal: ' + e.message, 'error'); }
+}
+
+function rsSupplierInfo(code) {
+    const p = rsSupplier.find(x => x.code === code);
+    return p ? `${p.serviceName} · ${rsRp(p.price)}` : '';
+}
+
+function rsRenderPackages() {
+    const box = document.getElementById('rsPackages');
+    const d = rsState;
+    if (!d || !d.products.length) { box.innerHTML = '<div class="text-center py-6 text-zinc-600 text-xs">Belum ada produk</div>'; return; }
+    box.innerHTML = d.products.map(p => {
+        const rows = p.packages.map(pk => {
+            const m = (d.map[p.id] || {})[pk.tag] || {};
+            const id = `${p.id}__${pk.tag}`;
+            const color = pk.stock === 0 ? 'text-red-400' : pk.stock < 5 ? 'text-yellow-400' : 'text-emerald-400';
+            return `<div class="p-2.5 rounded-xl" style="background:rgba(37,99,235,.05);border:1px solid rgba(37,99,235,.15)">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-xs font-bold text-white">${rsEsc(pk.label)}</span>
+                    <span class="text-[10px] font-bold ${color}">${pk.stock} stok</span>
+                </div>
+                <div class="flex gap-1.5 mb-1.5">
+                    <input type="text" list="rsSupplierList" id="rsCode-${rsEsc(id)}" value="${rsEsc(m.code || '')}" class="hm-input font-mono text-xs flex-1" placeholder="kode produk supplier (mis. ml-86)">
+                    <input type="text" id="rsData-${rsEsc(id)}" value="${rsEsc(m.data || '')}" class="hm-input text-xs" style="width:90px" placeholder="data (-)" title="Isi field 'data' order supplier. Produk key biasanya tidak butuh; default '-'">
+                    <button onclick="rsSaveMap('${rsEsc(p.id)}','${rsEsc(pk.tag)}')" class="px-2.5 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-300 text-[11px] font-bold">Simpan</button>
+                </div>
+                <div class="text-[10px] text-zinc-500 mb-1.5">${m.code ? rsEsc(rsSupplierInfo(m.code)) || 'Terpetakan' : 'Belum dipetakan'}</div>
+                <div class="flex gap-1.5 items-center">
+                    <input type="number" id="rsQty-${rsEsc(id)}" value="5" min="1" max="${d.maxBatch}" class="hm-input text-xs" style="width:70px">
+                    <button onclick="rsOrder('${rsEsc(p.id)}','${rsEsc(pk.tag)}',${pk.value},'${pk.unit}',this)" ${m.code ? '' : 'disabled style="opacity:.4"'} class="btn-primary flex-1 justify-center py-2"><iconify-icon icon="mdi:package-down"></iconify-icon> Restock key</button>
+                </div>
+            </div>`;
+        }).join('');
+        return `<div class="neon-card p-3"><div class="text-sm font-bold text-white mb-2">${rsEsc(p.name)}</div><div class="space-y-2">${rows || '<div class="text-[11px] text-zinc-600">Belum ada paket harga</div>'}</div></div>`;
+    }).join('');
+}
+
+async function rsSaveMap(pid, tag) {
+    const id = `${pid}__${tag}`;
+    const d = await api('/admin/restock/map', {
+        productId: pid, tag,
+        code: document.getElementById('rsCode-' + id).value,
+        data: document.getElementById('rsData-' + id).value
+    });
+    if (d.success) { toast('Pemetaan disimpan', 'success'); rsState.map = d.map; rsRenderPackages(); }
+    else toast(d.message || 'Gagal menyimpan', 'error');
+}
+
+async function rsOrder(pid, tag, value, unit, btn) {
+    const id = `${pid}__${tag}`;
+    const qty = parseInt(document.getElementById('rsQty-' + id).value, 10) || 0;
+    const m = (rsState.map[pid] || {})[tag];
+    const info = m ? rsSupplierInfo(m.code) : '';
+    if (!confirm(`Pesan ${qty} key ke supplier?\n${info ? info + '\n' : ''}Saldo supplier akan terpotong${rsState.sandbox ? ' (SANDBOX: tidak memotong saldo)' : ''}.`)) return;
+    btn.disabled = true;
+    const old = btn.innerHTML;
+    btn.innerHTML = '<iconify-icon icon="mdi:loading" class="animate-spin"></iconify-icon> Memesan...';
+    try {
+        const d = await api('/admin/restock/order', { productId: pid, value, unit, qty });
+        if (d.success) {
+            toast(`${d.placed}/${d.requested} order dibuat` + (d.warning ? ' — ' + d.warning : ''), d.warning ? 'error' : 'success');
+        } else toast(d.message || 'Gagal restock', 'error');
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+    btn.innerHTML = old; btn.disabled = false;
+    rsLoad();
+}
+
+const RS_STATUS = {
+    success: ['Sukses', 'text-emerald-400 bg-emerald-500/10'],
+    processing: ['Proses', 'text-yellow-400 bg-yellow-500/10'],
+    failed: ['Gagal', 'text-red-400 bg-red-500/10'],
+    sandbox: ['Sandbox', 'text-blue-300 bg-blue-500/10']
+};
+
+function rsRenderHistory() {
+    const box = document.getElementById('rsHistory');
+    const list = (rsState && rsState.restocks) || [];
+    if (!list.length) { box.innerHTML = '<div class="text-center py-4 text-zinc-600 text-xs">Belum ada riwayat restock</div>'; return; }
+    box.innerHTML = list.map(r => {
+        const ok = r.orders.filter(o => o.status === 'success' || o.status === 'sandbox').length;
+        const added = r.orders.filter(o => o.keyAdded).length;
+        const pend = r.orders.filter(o => o.status === 'processing').length;
+        const unit = r.unit === 'hour' ? 'Jam' : 'Hari';
+        const chips = r.orders.map(o => {
+            const st = RS_STATUS[o.status] || RS_STATUS.processing;
+            return `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${st[1]}" title="${rsEsc(o.error || o.note || o.invoice || o.reference)}">${st[0]}${o.keyAdded ? ' ✓' : ''}</span>`;
+        }).join(' ');
+        return `<div class="neon-card p-3">
+            <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                    <div class="text-xs font-bold text-white truncate">${rsEsc(r.productName)} · ${r.value} ${unit}${r.sandbox ? ' <span class="text-blue-300">[sandbox]</span>' : ''}</div>
+                    <div class="text-[10px] text-zinc-500">${new Date(r.createdAt).toLocaleString('id-ID')} · ${rsEsc(r.supplierCode)} · ${r.orders.length}/${r.qty} order · ${ok} sukses · ${added} key masuk stok</div>
+                </div>
+                ${pend ? `<button onclick="rsCheck('${r.id}',this)" class="px-2.5 py-1.5 rounded-lg bg-yellow-500/15 border border-yellow-500/25 text-yellow-300 text-[11px] font-bold flex-shrink-0">Cek Status (${pend})</button>` : ''}
+            </div>
+            <div class="flex flex-wrap gap-1 mt-2">${chips}</div>
+        </div>`;
+    }).join('');
+}
+
+async function rsCheck(id, btn) {
+    btn.disabled = true; btn.textContent = 'Mengecek...';
+    const d = await api('/admin/restock/check/' + id, {});
+    if (!d.success) toast(d.message || 'Gagal cek status', 'error');
+    rsLoad();
+}
+
+document.addEventListener('DOMContentLoaded', () => { const el = document.getElementById('pakasirWebhookUrl'); if (el) el.textContent = location.origin + '/api/webhooks/pakasir'; });
+
 // ── QRIS MODE ──
 function setQrisMode(mode) {
     document.getElementById('qrisModeVal').value = mode;
@@ -1561,7 +1807,7 @@ function setQrisMode(mode) {
     document.getElementById('modeStaticBtn').className = `flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${isStatic ? 'bg-blue-500/20 border-indigo-500/50 text-blue-300' : 'bg-white/3 border-white/10 text-zinc-500'}`;
     document.getElementById('modeApiBtn').className = `flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${!isStatic ? 'bg-blue-500/20 border-indigo-500/50 text-blue-300' : 'bg-white/3 border-white/10 text-zinc-500'}`;
     // Auto-save mode
-    api('/admin/settings/pakasir', { qrisMode: mode, apiKey: '<%= settings.pakasir?.apiKey||"" %>', project: '<%= settings.pakasir?.project||"" %>', apiBaseUrl: '<%= settings.pakasir?.apiBaseUrl||"api.pakasir.com" %>' })
+    api('/admin/settings/pakasir', { qrisMode: mode })
         .then(d => { if(d.success) toast(`Mode QRIS: ${isStatic ? 'Statis' : 'PakKasir API'}`, 'success'); });
 }
 
@@ -1589,7 +1835,7 @@ document.getElementById('qrisStaticForm').addEventListener('submit', async funct
     if (d.success) {
         toast('QRIS berhasil diupload! ✓', 'success');
         // Juga set mode ke statis dan save
-        await api('/admin/settings/pakasir', { qrisMode: 'static', apiKey: '<%= settings.pakasir?.apiKey||"" %>', project: '<%= settings.pakasir?.project||"" %>', apiBaseUrl: '<%= settings.pakasir?.apiBaseUrl||"api.pakasir.com" %>' });
+        await api('/admin/settings/pakasir', { qrisMode: 'static' });
         setTimeout(() => location.reload(), 900);
     } else toast(d.message || 'Gagal upload', 'error');
 });
@@ -1597,15 +1843,14 @@ document.getElementById('qrisStaticForm').addEventListener('submit', async funct
 async function testPakasir() {
     const apiKey = document.querySelector('[name=apiKey]').value;
     const project = document.querySelector('[name=project]').value;
-    const apiBaseUrl = document.querySelector('[name=apiBaseUrl]').value;
     const el = document.getElementById('testResult');
     el.className = 'text-[11px] p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300';
     el.textContent = 'Menguji koneksi...';
     el.classList.remove('hidden');
-    const d = await api('/admin/qris/test', { apiKey, project, apiBaseUrl });
+    const d = await api('/admin/qris/test', { apiKey, project });
     if (d.success) {
         el.className = 'text-[11px] p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300';
-        el.textContent = '✓ Koneksi berhasil! API siap digunakan.';
+        el.textContent = '✓ Koneksi API v2 berhasil! Transaksi tes dibuat (txn: ' + (d.txn_id||'-') + ').';
     } else {
         el.className = 'text-[11px] p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400';
         el.textContent = '✗ ' + (d.message || 'Koneksi gagal');

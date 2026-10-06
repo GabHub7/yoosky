@@ -9,6 +9,8 @@ const { v4: uuidv4 } = require('uuid');
 const https = require('https');
 const multer = require('multer');
 const crypto = require('crypto');
+const dur = require('./duration');
+const youdu = require('./youdustore');
 
 // Load .env FIRST before anything reads process.env
 require('dotenv').config();
@@ -236,6 +238,8 @@ app.use((req, res, next) => {
 // Dipakai di views lewat <%- safeJson(dataVariable) %> menggantikan
 // <%- JSON.stringify(dataVariable) %> untuk data yang di-inject ke <script>.
 app.locals.safeJson = (data) => JSON.stringify(data).replace(/</g, '\\u003c');
+// Helper durasi (hari/jam) untuk view EJS
+app.locals.dur = dur;
 
 // Inject settings + isAdmin ke semua view otomatis
 app.use(async (req, res, next) => {
@@ -345,7 +349,8 @@ const initDB = async () => {
       waGroup: 'https://chat.whatsapp.com/KbD6Yyyt5c8A9lZyykwSap',
     },
     fonnteToken: '',
-    pakasir: { apiKey: '', project: '', mode: 'production' },
+    pakasir: { apiKey: '', project: '', mode: 'production', webhookSecret: '' },
+    youdu: { token: '', apiKey: '', sandbox: false, callbackSecret: '', map: {} },
     adminUsername: fallbackUsername,
     adminPassword: bcrypt.hashSync(fallbackPassword, 12),
     logoUrl: '/uploads/logo-ys.png',
@@ -360,7 +365,7 @@ const initDB = async () => {
     banners: []
   };
 
-  const arrayFiles = ['users.json', 'products.json', 'transactions.json', 'testimonials.json', 'notifications.json', 'keyspool.json', 'vouchers.json'];
+  const arrayFiles = ['users.json', 'products.json', 'transactions.json', 'testimonials.json', 'notifications.json', 'keyspool.json', 'vouchers.json', 'restocks.json'];
 
   // Seed arrays only if they don't exist at all
   for (const filename of arrayFiles) {
@@ -580,35 +585,89 @@ const formatDate = (date = new Date()) => {
   return `${day}/${month}/${year} ${hours}:${minutes}`;
 };
 
-// ── PakKasir API (app.pakasir.com) ──
-const createQRISPayment = (orderId, amount, settings) => {
-  return new Promise((resolve, reject) => {
-    const apiKey = settings.pakasir?.apiKey?.trim() || '';
-    const project = settings.pakasir?.project?.trim() || '';
-    if (!apiKey || !project) return reject(new Error('API Key atau Project PakKasir belum dikonfigurasi'));
+// ── PakKasir API v2 (app.pakasir.com) ──
+// Dokumentasi: https://pakasir.com/p/create-transaction (v1 dihentikan 20 Okt 2026)
+//   POST /api/v2/create-transaction/{slug}/{order_id}   body {method, amount}
+//   GET  /api/v2/transaction-status/{slug}/{txn_id}     (maks 1x / 4 dtk per transaksi)
+//   Webhook POST ke server kita saat transaksi berhasil (header X-Secret)
+const PAKASIR_QRIS_MIN = 500;
+const PAKASIR_QRIS_MAX = 10000000;
 
-    const body = JSON.stringify({ project, order_id: orderId, amount, api_key: apiKey });
-    const req = https.request({
-      hostname: 'app.pakasir.com', port: 443,
-      path: '/api/transactioncreate/qris', method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-      timeout: 15000
-    }, (res) => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        try {
-          const r = JSON.parse(data);
-          const qr = r.payment?.payment_number || r.payment_number || r.qr_string || r.data?.payment_number;
-          if (!qr) return reject(new Error(r.message || `Pakasir error: ${data.slice(0,100)}`));
-          resolve({ qr_string: qr, total_payment: r.payment?.total_payment || amount, expired_at: r.payment?.expired_at || null });
-        } catch(e) { reject(new Error('Gagal parse response PakKasir')); }
-      });
+const getPakasirCfg = (settings) => ({
+  apiKey: (settings?.pakasir?.apiKey || process.env.PAKASIR_API_KEY || '').trim(),
+  slug: (settings?.pakasir?.project || process.env.PAKASIR_PROJECT || '').trim(),
+  webhookSecret: (settings?.pakasir?.webhookSecret || process.env.PAKASIR_WEBHOOK_SECRET || '').trim(),
+  sandboxOk: (settings?.pakasir?.mode || 'production') === 'sandbox'
+});
+
+const pakasirRequest = (method, reqPath, body, cfg) => new Promise((resolve, reject) => {
+  if (!cfg.apiKey || !cfg.slug) return reject(new Error('API Key atau Slug project PakKasir belum dikonfigurasi'));
+  const payload = body ? JSON.stringify(body) : null;
+  const headers = { 'X-Api-Key': cfg.apiKey, 'Accept': 'application/json' };
+  if (payload) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = Buffer.byteLength(payload); }
+  const req = https.request({ hostname: 'app.pakasir.com', port: 443, path: reqPath, method, headers, timeout: 15000 }, (res) => {
+    let data = '';
+    res.on('data', c => data += c);
+    res.on('end', () => {
+      let json = null;
+      try { json = JSON.parse(data); } catch (_) {}
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        const msg = (json && (json.message || json.error)) || `HTTP ${res.statusCode}: ${String(data).slice(0, 100)}`;
+        const err = new Error(`Pakasir: ${msg}`);
+        err.status = res.statusCode;
+        return reject(err);
+      }
+      if (!json) return reject(new Error('Gagal parse response PakKasir'));
+      resolve(json);
     });
-    req.on('timeout', () => { req.destroy(); reject(new Error('PakKasir timeout')); });
-    req.on('error', e => reject(new Error('Network error: ' + e.message)));
-    req.write(body); req.end();
   });
+  req.on('timeout', () => { req.destroy(); reject(new Error('PakKasir timeout')); });
+  req.on('error', e => reject(new Error('Network error: ' + e.message)));
+  if (payload) req.write(payload);
+  req.end();
+});
+
+// Buat transaksi QRIS (v2 bersifat find-or-create: order_id + body sama => response sama)
+const createQRISPayment = async (orderId, amount, settings) => {
+  const cfg = getPakasirCfg(settings);
+  const amt = parseInt(amount, 10);
+  if (!Number.isInteger(amt) || amt < PAKASIR_QRIS_MIN) throw new Error(`Nominal QRIS minimal Rp ${PAKASIR_QRIS_MIN.toLocaleString('id-ID')}`);
+  if (amt > PAKASIR_QRIS_MAX) throw new Error(`Nominal QRIS maksimal Rp ${PAKASIR_QRIS_MAX.toLocaleString('id-ID')}`);
+  const r = await pakasirRequest('POST',
+    `/api/v2/create-transaction/${encodeURIComponent(cfg.slug)}/${encodeURIComponent(orderId)}`,
+    { method: 'qris', amount: amt }, cfg);
+  if (!r.qr_string) throw new Error(r.message || `Pakasir error: ${JSON.stringify(r).slice(0, 100)}`);
+  return {
+    txn_id: r.txn_id || null,
+    qr_string: r.qr_string,
+    fee: r.fee || 0,
+    total_payment: r.total_payment || amt,
+    expired_at: r.expired_at || null,
+    is_sandbox: !!r.is_sandbox
+  };
+};
+
+// Status transaksi v2: { txn_id, order_id, amount, is_sandbox, status: pending|completed|canceled, completed_at }
+const getPakasirStatus = (txnId, settings) => {
+  const cfg = getPakasirCfg(settings);
+  return pakasirRequest('GET',
+    `/api/v2/transaction-status/${encodeURIComponent(cfg.slug)}/${encodeURIComponent(txnId)}`, null, cfg);
+};
+
+// Transaksi lama (dibuat via API v1) belum punya txn_id. Karena endpoint create v2
+// bersifat find-or-create, panggil lagi dengan order_id + amount yang sama untuk
+// mendapatkan txn_id-nya, lalu simpan supaya tidak perlu diulang.
+const ensurePakasirTxnId = async (transaction, settings) => {
+  if (transaction.pakasirTxnId) return transaction.pakasirTxnId;
+  const r = await createQRISPayment(transaction.orderId, transaction.price, settings);
+  if (!r.txn_id) throw new Error('Pakasir tidak mengembalikan txn_id');
+  transaction.pakasirTxnId = r.txn_id;
+  return r.txn_id;
+};
+
+const safeEqual = (a, b) => {
+  const ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
 };
 
 // Kirim notifikasi WhatsApp otomatis ke admin via Fonnte (jika token dikonfigurasi)
@@ -633,30 +692,6 @@ const sendWhatsAppNotif = (target, message, settings) => {
     req.on('timeout', () => { req.destroy(); resolve(false); });
     req.on('error', () => resolve(false));
     req.write(body); req.end();
-  });
-};
-
-const checkPaymentStatus = (orderId, amount, settings) => {
-  return new Promise((resolve, reject) => {
-    const apiKey = settings.pakasir?.apiKey?.trim() || '';
-    const project = settings.pakasir?.project?.trim() || '';
-    if (!apiKey || !project) return reject(new Error('API Key PakKasir belum dikonfigurasi'));
-
-    const q = `project=${encodeURIComponent(project)}&amount=${parseInt(amount)}&order_id=${encodeURIComponent(orderId)}&api_key=${encodeURIComponent(apiKey)}`;
-    const req = https.request({
-      hostname: 'app.pakasir.com', port: 443,
-      path: `/api/transactiondetail?${q}`, method: 'GET', timeout: 10000
-    }, (res) => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)); }
-        catch(e) { reject(new Error('Gagal parse response status')); }
-      });
-    });
-    req.on('timeout', () => { req.destroy(); reject(new Error('PakKasir status timeout')); });
-    req.on('error', e => reject(new Error('Network error: ' + e.message)));
-    req.end();
   });
 };
 
@@ -1054,7 +1089,7 @@ app.post('/reseller/join', requireAuth, async (req, res) => {
     const orderCode = generateOrderCode();
     const qrisMode = settings.qrisMode || 'static';
 
-    let qrString = null, isStatic = false;
+    let qrString = null, isStatic = false, pakasirTxnId = null;
 
     if (qrisMode === 'static') {
       if (!settings.qrisStaticImage) return res.json({ success: false, message: 'Admin belum mengatur QRIS. Hubungi admin.' });
@@ -1063,6 +1098,7 @@ app.post('/reseller/join', requireAuth, async (req, res) => {
       try {
         const r = await createQRISPayment(orderId, price, settings);
         qrString = r.qr_string;
+        pakasirTxnId = r.txn_id;
       } catch (e) {
         if (settings.qrisStaticImage) { isStatic = true; }
         else return res.json({ success: false, message: 'QRIS error: ' + e.message });
@@ -1075,7 +1111,7 @@ app.post('/reseller/join', requireAuth, async (req, res) => {
       userId: user.id, type: 'reseller',
       productName: 'Upgrade Reseller VIP',
       customerName: user.username, wa: user.wa,
-      price, totalPayment: price, qrString, isStatic,
+      price, totalPayment: price, qrString, isStatic, pakasirTxnId,
       status: 'pending', key: null,
       createdAt: new Date().toISOString(), time: formatDate()
     });
@@ -1112,7 +1148,7 @@ app.post('/wallet/topup', requireAuth, async (req, res) => {
     const orderCode = generateOrderCode();
     const qrisMode = settings.qrisMode || 'static';
 
-    let qrString = null, isStatic = false, totalPayment = amount, expiredAt = null;
+    let qrString = null, isStatic = false, totalPayment = amount, expiredAt = null, pakasirTxnId = null;
 
     if (qrisMode === 'static') {
       if (!settings.qrisStaticImage) return res.json({ success: false, message: 'Admin belum mengatur QRIS. Hubungi admin.' });
@@ -1121,6 +1157,7 @@ app.post('/wallet/topup', requireAuth, async (req, res) => {
       try {
         const r = await createQRISPayment(orderId, amount, settings);
         qrString = r.qr_string;
+        pakasirTxnId = r.txn_id;
         // total_payment dari Pakasir = amount + fee mereka (kalau ada). Ini
         // CUMA buat ditampilkan ke user biar nominal yang ditampilkan sama
         // persis dengan yang diminta di QR code-nya. Saldo yang dikreditkan
@@ -1141,7 +1178,7 @@ app.post('/wallet/topup', requireAuth, async (req, res) => {
       productName: 'Top Up Saldo Reseller',
       amount,
       customerName: user.username, wa: user.wa,
-      price: amount, totalPayment, expiredAt, qrString, isStatic,
+      price: amount, totalPayment, expiredAt, qrString, isStatic, pakasirTxnId,
       status: 'pending', key: null,
       createdAt: new Date().toISOString(), time: formatDate()
     });
@@ -1178,35 +1215,17 @@ app.post('/wallet/buy', requireAuth, async (req, res) => {
     if (!product || product.status !== 'active') return res.json({ success: false, message: 'Produk tidak ditemukan' });
     if (!product.keys || product.keys.length === 0) return res.json({ success: false, message: 'Stok habis' });
 
-    // Resolusi harga paket — logika sama seperti /create-order
-    let price = 0, selectedDays = null;
-    if (product.pricingOptions?.length) {
-      let opt = null;
-      const itemMatch = product.items?.find(i => i.l === duration || i.l.includes(duration));
-      if (itemMatch) {
-        opt = product.pricingOptions.find(o => o.price === itemMatch.p);
-        if (!opt) { price = itemMatch.p; const m = duration.match(/(\d+)/); selectedDays = m ? parseInt(m[1]) : null; }
-        else { price = opt.price; selectedDays = opt.days; }
-      } else {
-        const days = parseInt(duration);
-        opt = product.pricingOptions.find(o => o.days === days);
-        if (!opt) return res.json({ success: false, message: 'Durasi tidak valid' });
-        price = opt.price; selectedDays = days;
-      }
-    } else {
-      const opt = product.items?.find(i => i.l.includes(duration));
-      if (!opt) return res.json({ success: false, message: 'Durasi tidak valid' });
-      price = opt.p;
-      const m = duration.match(/(\d+)/); selectedDays = m ? parseInt(m[1]) : null;
-    }
+    // Resolusi paket (harga + durasi hari/jam) — sama seperti /create-order
+    const pkg = dur.resolvePackage(product, duration);
+    if (!pkg) return res.json({ success: false, message: 'Durasi tidak valid' });
+    if (dur.stockFor(product.keys, pkg.value, pkg.unit) === 0) return res.json({ success: false, message: 'Stok paket ini habis' });
+    let price = pkg.price;
+    const selectedDays = pkg.value, selectedUnit = pkg.unit;
 
     const settings = readDB('settings.json');
-    // Prioritas harga: reseller_price manual per-produk → global diskon %
-    const matchedItem = product.items?.find(i => i.l === duration || i.l.includes(duration));
-    const matchedOpt = product.pricingOptions?.find(o => o.days === selectedDays);
-    const manualResellerPrice = matchedItem?.reseller_price ?? matchedOpt?.reseller_price ?? null;
-    if (manualResellerPrice != null && manualResellerPrice >= 0) {
-      price = manualResellerPrice;
+    // Prioritas harga: reseller_price manual per-paket → global diskon %
+    if (pkg.resellerPrice != null && pkg.resellerPrice >= 0) {
+      price = pkg.resellerPrice;
     } else {
       const disc = settings.resellerDiscount || 20;
       price = Math.round(price * (1 - disc / 100));
@@ -1231,21 +1250,8 @@ app.post('/wallet/buy', requireAuth, async (req, res) => {
         needed: price, balance, plainMessage: `Saldo tidak cukup. Kurang Rp ${(price - balance).toLocaleString('id-ID')}, top up dulu yuk!` });
     }
 
-    // Ambil key — duration-specific dulu (format KEY:DAYS), fallback generic
-    let key = null;
-    const allKeys = product.keys;
-    if (selectedDays) {
-      const idx = allKeys.findIndex(k => {
-        const parts = k.split(':');
-        return parts.length > 1 && parseInt(parts[parts.length - 1]) === selectedDays;
-      });
-      if (idx !== -1) key = allKeys.splice(idx, 1)[0].split(':')[0];
-    }
-    if (!key) {
-      const idx = allKeys.findIndex(k => !k.includes(':'));
-      if (idx !== -1) key = allKeys.splice(idx, 1)[0];
-      else key = allKeys.shift();
-    }
+    // Ambil key sesuai durasi (KEY:7 = 7 hari, KEY:12h = 12 jam), fallback key generik
+    const key = dur.takeKey(product.keys, selectedDays, selectedUnit);
     if (!key) return res.json({ success: false, message: 'Stok habis' });
 
     // Potong saldo & catat transaksi — lakukan setelah key berhasil diambil
@@ -1260,7 +1266,7 @@ app.post('/wallet/buy', requireAuth, async (req, res) => {
     transactions.push({
       id: refId, orderId: `WLT-${Date.now()}`, code: orderCode,
       userId: user.id, productId: product.id, productName: product.name,
-      duration, selectedDays,
+      duration, selectedDays, selectedUnit,
       originalPrice: voucherDiscount > 0 ? originalPrice : undefined,
       voucherCode: appliedVoucher ? appliedVoucher.code : undefined,
       voucherDiscount: voucherDiscount > 0 ? voucherDiscount : undefined,
@@ -1528,21 +1534,10 @@ app.get('/buy/:id', requireAuth, (req, res) => {
   const isReseller = !!(user?.is_reseller);
   const resellerDiscount = settings.resellerDiscount || 20;
   const allKeys = product.keys || [];
-  const genericKeys = allKeys.filter(k => !k.includes(':'));
   if (product.items) {
     product.items = product.items.map(item => {
-      const m = (item.l || '').match(/(\d+)\s+DAYS/i);
-      const days = m ? parseInt(m[1]) : null;
-      let stok;
-      if (days) {
-        const tagged = allKeys.filter(k => {
-          const parts = k.split(':');
-          return parts.length > 1 && parseInt(parts[parts.length - 1]) === days;
-        }).length;
-        stok = tagged > 0 ? tagged : genericKeys.length;
-      } else {
-        stok = genericKeys.length;
-      }
+      const pd = dur.fromLabel(item.l);           // { value, unit } hari/jam, null kalau label tak berpola
+      const stok = pd ? dur.stockFor(allKeys, pd.value, pd.unit) : dur.countGeneric(allKeys);
       // Prioritas harga reseller: 1) harga manual per-produk jika ada,
       // 2) harga dari pricingOptions, 3) fallback ke global diskon %
       let computedResellerPrice = null;
@@ -1550,8 +1545,7 @@ app.get('/buy/:id', requireAuth, (req, res) => {
         if (item.reseller_price != null && item.reseller_price >= 0) {
           computedResellerPrice = item.reseller_price;
         } else {
-          // Cek di pricingOptions
-          const pOpt = (product.pricingOptions || []).find(o => o.days === days);
+          const pOpt = pd ? (product.pricingOptions || []).find(o => parseInt(o.days, 10) === pd.value && dur.normUnit(o.unit) === pd.unit) : null;
           if (pOpt?.reseller_price != null && pOpt.reseller_price >= 0) {
             computedResellerPrice = pOpt.reseller_price;
           } else {
@@ -1583,43 +1577,19 @@ app.post('/create-order', requireAuth, async (req, res) => {
     if (!product || product.status !== 'active') return res.json({ success: false, message: 'Produk tidak ditemukan' });
     if (!product.keys || product.keys.length === 0) return res.json({ success: false, message: 'Stok habis' });
 
-    // Support pricingOptions (deem style: {days,price}) dan items (lama: {l,p})
-    let price = 0, selectedDays = null;
-    if (product.pricingOptions?.length) {
-      // duration bisa berupa label teks ("PRODUK 30 DAYS") atau angka ("30")
-      // Coba match by label dulu via items, lalu fallback ke ekstrak angka
-      let opt = null;
-      const itemMatch = product.items?.find(i => i.l === duration || i.l.includes(duration));
-      if (itemMatch) {
-        // Cari pricingOptions yang cocok dengan price dari items
-        opt = product.pricingOptions.find(o => o.price === itemMatch.p);
-        if (!opt) { price = itemMatch.p; const m = duration.match(/(\d+)/); selectedDays = m ? parseInt(m[1]) : null; }
-        else { price = opt.price; selectedDays = opt.days; }
-      } else {
-        // Fallback: parseInt langsung (untuk case duration dikirim sebagai angka)
-        const days = parseInt(duration);
-        opt = product.pricingOptions.find(o => o.days === days);
-        if (!opt) return res.json({ success: false, message: 'Durasi tidak valid' });
-        price = opt.price; selectedDays = days;
-      }
-    } else {
-      const opt = product.items?.find(i => i.l.includes(duration));
-      if (!opt) return res.json({ success: false, message: 'Durasi tidak valid' });
-      price = opt.p;
-      const m = duration.match(/(\d+)/); selectedDays = m ? parseInt(m[1]) : null;
-    }
+    // Resolusi paket (harga + durasi hari/jam) — lihat duration.js
+    const pkg = dur.resolvePackage(product, duration);
+    if (!pkg) return res.json({ success: false, message: 'Durasi tidak valid' });
+    if (dur.stockFor(product.keys, pkg.value, pkg.unit) === 0) return res.json({ success: false, message: 'Stok paket ini habis' });
+    let price = pkg.price;
+    const selectedDays = pkg.value, selectedUnit = pkg.unit;
 
     const settings = readDB('settings.json');
-    // Terapkan harga reseller: gunakan harga manual per-produk jika ada,
-    // fallback ke global diskon % jika tidak ada
+    // Harga reseller: harga manual per-paket jika ada, fallback global diskon %
     const orderUser = getSessionUser(req);
     if (orderUser?.is_reseller) {
-      // Cari item yang sesuai untuk cek reseller_price manual
-      const matchedItem = product.items?.find(i => i.l === duration || i.l.includes(duration));
-      const matchedOpt = product.pricingOptions?.find(o => o.days === selectedDays);
-      const manualResellerPrice = matchedItem?.reseller_price ?? matchedOpt?.reseller_price ?? null;
-      if (manualResellerPrice != null && manualResellerPrice >= 0) {
-        price = manualResellerPrice;
+      if (pkg.resellerPrice != null && pkg.resellerPrice >= 0) {
+        price = pkg.resellerPrice;
       } else {
         const disc = settings.resellerDiscount || 20;
         price = Math.round(price * (1 - disc / 100));
@@ -1644,7 +1614,7 @@ app.post('/create-order', requireAuth, async (req, res) => {
     const refId = uuidv4();
     const orderCode = generateOrderCode();
 
-    let qrString = null, isStatic = false, totalPayment = price, expiredAt = null;
+    let qrString = null, isStatic = false, totalPayment = price, expiredAt = null, pakasirTxnId = null;
 
     if (qrisMode === 'static') {
       if (!settings.qrisStaticImage) return res.json({ success: false, message: 'Upload gambar QRIS di admin panel terlebih dahulu.' });
@@ -1653,6 +1623,7 @@ app.post('/create-order', requireAuth, async (req, res) => {
       try {
         const r = await createQRISPayment(orderId, price, settings);
         qrString = r.qr_string;
+        pakasirTxnId = r.txn_id;
         totalPayment = r.total_payment || price;
         expiredAt = r.expired_at || null;
       } catch (error) {
@@ -1677,12 +1648,12 @@ app.post('/create-order', requireAuth, async (req, res) => {
     transactions.push({
       id: refId, orderId, code: orderCode,
       userId: req.session.userId, productId: product.id, productName: product.name,
-      duration, selectedDays,
+      duration, selectedDays, selectedUnit,
       originalPrice: voucherDiscount > 0 ? originalPrice : undefined,
       voucherCode: appliedVoucher ? appliedVoucher.code : undefined,
       voucherDiscount: voucherDiscount > 0 ? voucherDiscount : undefined,
       price, totalPayment,
-      customerName, wa, qrString, isStatic,
+      customerName, wa, qrString, isStatic, pakasirTxnId,
       status: 'pending', key: null,
       createdAt: new Date().toISOString(), time: formatDate()
     });
@@ -1715,6 +1686,123 @@ setInterval(() => {
   for (const [k, v] of gatewayCheckAt) if (v < cutoff) gatewayCheckAt.delete(k);
 }, 10 * 60 * 1000).unref();
 
+const buildDoneResponse = (transaction) => {
+  if (transaction.type === 'reseller') return { success: true, status: 'done', type: 'reseller' };
+  if (transaction.type === 'deposit') {
+    const u = readDB('users.json').find(u => u.id === transaction.userId);
+    return { success: true, status: 'done', type: 'deposit', balance: u?.balance || 0 };
+  }
+  return { success: true, status: 'done', key: transaction.key, code: transaction.code, outOfStock: !!transaction.outOfStock };
+};
+
+// Penuhi transaksi yang SUDAH terbukti dibayar (dipanggil dari polling /check-payment
+// maupun webhook Pakasir). Idempotent: kalau sudah 'done' langsung kembalikan hasilnya.
+// Pemanggil WAJIB memegang lock processingOrders untuk refId ini.
+async function fulfillPaid(refId, settings) {
+  const transactions = await readFresh('transactions.json');
+  const transaction = transactions.find(t => t.id === refId);
+  if (!transaction) return { success: false, message: 'Transaksi tidak ditemukan' };
+  if (transaction.status === 'done') return buildDoneResponse(transaction);
+
+  // Upgrade reseller
+  if (transaction.type === 'reseller') {
+    const users = await readFresh('users.json');
+    const u = users.find(u => u.id === transaction.userId);
+    if (u) {
+      u.is_reseller = true;
+      u.role = 'reseller';
+      u.reseller_since = new Date().toISOString();
+      u.reseller_code = 'RSL-' + u.username.toUpperCase().slice(0, 4) + '-' + crypto.randomBytes(2).toString('hex').toUpperCase();
+      await writeDB('users.json', users);
+    }
+    transaction.status = 'done';
+    transaction.paidAt = new Date().toISOString();
+    await writeDB('transactions.json', transactions);
+    return { success: true, status: 'done', type: 'reseller' };
+  }
+
+  // Top up saldo wallet
+  if (transaction.type === 'deposit') {
+    const users = await readFresh('users.json');
+    const u = users.find(u => u.id === transaction.userId);
+    if (u) {
+      u.balance = (u.balance || 0) + (transaction.amount || transaction.price || 0);
+      await writeDB('users.json', users);
+    }
+    transaction.status = 'done';
+    transaction.paidAt = new Date().toISOString();
+    await writeDB('transactions.json', transactions);
+    return { success: true, status: 'done', type: 'deposit', balance: u?.balance || 0 };
+  }
+
+  // Produk biasa: ambil key sesuai durasi (hari/jam)
+  const products = await readFresh('products.json');
+  const product = products.find(p => p.id === transaction.productId);
+  const key = product ? dur.takeKey(product.keys, transaction.selectedDays, transaction.selectedUnit) : null;
+  let outOfStock = false;
+
+  if (key) {
+    product.sold = (product.sold || 0) + 1;
+    await writeDB('products.json', products);
+  } else {
+    // Stok habis — jangan kirim key palsu. Tandai transaksi & beri tahu admin via WA.
+    outOfStock = true;
+  }
+
+  transaction.status = 'done';
+  transaction.key = key;
+  transaction.outOfStock = outOfStock;
+  transaction.paidAt = new Date().toISOString();
+  await writeDB('transactions.json', transactions);
+
+  if (outOfStock) {
+    const durTxt = transaction.selectedDays ? ` (${dur.human(transaction.selectedDays, transaction.selectedUnit)})` : '';
+    const waMsg = `⚠️ STOK HABIS - Pesanan butuh diproses manual!\n\n` +
+      `Order: ${transaction.code}\n` +
+      `Produk: ${transaction.productName}${durTxt}\n` +
+      `Customer: ${transaction.customerName} (${transaction.wa || '-'})\n` +
+      `Total: Rp ${Number(transaction.price).toLocaleString('id-ID')}\n\n` +
+      `Pembayaran sudah masuk tapi stok key kosong. Segera restock & kirim key manual ke pembeli.`;
+    sendWhatsAppNotif(settings.contact?.whatsapp, waMsg, settings).catch(() => {});
+  }
+
+  const notifs = await readFresh('notifications.json');
+  const buyer = readDB('users.json').find(u => u.id === transaction.userId);
+  notifs.unshift({ id: uuidv4(), type: 'purchase', buyerName: transaction.customerName,
+    buyerPhoto: buyer?.photo || null, productName: transaction.productName,
+    price: transaction.price, time: transaction.paidAt, timeStr: formatDate(new Date(transaction.paidAt)) });
+  await writeDB('notifications.json', notifs.slice(0, 50));
+
+  return { success: true, status: 'done', key, code: transaction.code, outOfStock };
+}
+
+// Cek status ke Pakasir v2 dan validasi: harus 'completed', nominal sama dengan
+// transaksi kita, order_id cocok, dan bukan transaksi sandbox (kecuali mode sandbox).
+// return 'paid' | 'expired' | 'pending'
+async function verifyPakasirPaid(transaction, settings, knownTxnId) {
+  const txnId = knownTxnId || await ensurePakasirTxnId(transaction, settings);
+  const r = await getPakasirStatus(txnId, settings);
+  const status = String(r.status || '').toLowerCase();
+  if (status === 'canceled' || status === 'cancelled' || status === 'expired') return 'expired';
+  if (status !== 'completed') {
+    if (status !== 'pending') console.warn(`[pakasir] Status tidak dikenali untuk order ${transaction.orderId}: "${status}"`);
+    return 'pending';
+  }
+  if (r.order_id && r.order_id !== transaction.orderId) {
+    console.error(`[pakasir] order_id tidak cocok: ${r.order_id} != ${transaction.orderId}`);
+    return 'pending';
+  }
+  if (r.amount != null && Number(r.amount) !== Number(transaction.price)) {
+    console.error(`[pakasir] Nominal tidak cocok untuk ${transaction.orderId}: pakasir=${r.amount} kita=${transaction.price}`);
+    return 'pending';
+  }
+  if (r.is_sandbox && !getPakasirCfg(settings).sandboxOk) {
+    console.warn(`[pakasir] Transaksi sandbox ${transaction.orderId} diabaikan (mode production).`);
+    return 'pending';
+  }
+  return 'paid';
+}
+
 app.get('/check-payment/:refId', requireAuth, async (req, res) => {
   const refId = req.params.refId;
   // Cegah race condition: jika transaksi sedang diproses, kembalikan pending
@@ -1726,147 +1814,35 @@ app.get('/check-payment/:refId', requireAuth, async (req, res) => {
     const transactions = readDB('transactions.json');
     const transaction = transactions.find(t => t.id === refId);
     if (!transaction) return res.json({ success: false, message: 'Transaksi tidak ditemukan' });
-    if (transaction.status === 'done') {
-      if (transaction.type === 'reseller') return res.json({ success: true, status: 'done', type: 'reseller' });
-      if (transaction.type === 'deposit') {
-        const u = readDB('users.json').find(u => u.id === transaction.userId);
-        return res.json({ success: true, status: 'done', type: 'deposit', balance: u?.balance || 0 });
-      }
-      return res.json({ success: true, status: 'done', key: transaction.key, code: transaction.code });
-    }
+    if (transaction.status === 'done') return res.json(buildDoneResponse(transaction));
+    if (transaction.status === 'expired') return res.json({ success: true, status: 'expired' });
 
     // Static QRIS: tunggu konfirmasi manual admin
     if (transaction.isStatic) return res.json({ success: true, status: 'pending_static' });
 
-    // HEMAT CPU/durasi function: jangan panggil API Pakasir lebih sering dari
-    // 1x per 4 dtk untuk order yang sama (polling beberapa tab / klik tombol
-    // "Cek Status" berulang tidak menembak gateway tiap kali).
+    // Pakasir v2: maks 1x per 4 detik per transaksi (+ hemat CPU function)
     const lastGw = gatewayCheckAt.get(refId) || 0;
     if (Date.now() - lastGw < 4000) return res.json({ success: true, status: 'pending' });
     gatewayCheckAt.set(refId, Date.now());
 
     const settings = readDB('settings.json');
-    let paid = false;
+    let verdict = 'pending';
     try {
-      // PENTING: Pakasir mewajibkan parameter `amount` di /api/transactiondetail
-      // adalah NOMINAL ASLI yang diminta saat transaksi dibuat (field `price`
-      // kita), BUKAN `total_payment` (yang sudah ditambah fee Pakasir).
-      // Sebelumnya kode ini salah kirim totalPayment, jadi setiap kali
-      // Pakasir mengenakan fee (tergantung channel/bank pembayaran, mis.
-      // saat dirutekan lewat "Zona ID"), query ke Pakasir gagal mencocokkan
-      // transaksinya — hasilnya status selalu balik pending walau uang
-      // sudah benar-benar masuk ke saldo Pakasir. Lihat dokumentasi resmi:
-      // https://pakasir.com/p/docs
-      const r = await checkPaymentStatus(transaction.orderId, transaction.price, settings);
-      // Normalize status dari berbagai format response PakKasir
-      const status = (r.transaction?.status || r.status || r.data?.status || '').toLowerCase();
-      paid = ['completed','success','paid','settlement','capture','complete','authorize','accepted'].includes(status) || r.success === true;
-      if (!paid && !['expired','canceled','cancelled',''].includes(status)) {
-        // Status nggak match daftar di atas tapi juga bukan expired — log biar kelihatan di server log kalau Pakasir balikin status baru yang belum kita tangani
-        console.warn(`[check-payment] Status tidak dikenali untuk order ${transaction.orderId}: "${status}" | raw response:`, JSON.stringify(r).slice(0, 300));
-      }
-      if (['expired','canceled','cancelled'].includes(status)) {
-        transaction.status = 'expired';
-        await writeDB('transactions.json', transactions);
-        return res.json({ success: true, status: 'expired' });
-      }
-    } catch(e) {
-      // Sebelumnya error di sini ditelan total tanpa jejak (komentar doang).
-      // Sekarang dicatat ke log server supaya kalau status macet pending
-      // terus, gampang ketahuan apakah penyebabnya error koneksi/API,
-      // bukan cuma nebak-nebak.
+      const hadTxnId = !!transaction.pakasirTxnId;
+      verdict = await verifyPakasirPaid(transaction, settings);
+      if (!hadTxnId && transaction.pakasirTxnId) await writeDB('transactions.json', transactions);
+    } catch (e) {
       console.error(`[check-payment] Gagal cek status order ${transaction.orderId}:`, e.message);
     }
 
-    if (paid) {
-      // Jika transaksi reseller, upgrade status user
-      if (transaction.type === 'reseller') {
-        const users = readDB('users.json');
-        const u = users.find(u => u.id === transaction.userId);
-        if (u) {
-          u.is_reseller = true;
-          u.role = 'reseller';
-          u.reseller_since = new Date().toISOString();
-          u.reseller_code = 'RSL-' + u.username.toUpperCase().slice(0, 4) + '-' + crypto.randomBytes(2).toString('hex').toUpperCase();
-          await writeDB('users.json', users);
-        }
-        transaction.status = 'done';
-        transaction.paidAt = new Date().toISOString();
-        await writeDB('transactions.json', transactions);
-        return res.json({ success: true, status: 'done', type: 'reseller' });
-      }
-
-      // Jika transaksi top up saldo wallet, kreditkan saldo user
-      if (transaction.type === 'deposit') {
-        const users = readDB('users.json');
-        const u = users.find(u => u.id === transaction.userId);
-        if (u) {
-          u.balance = (u.balance || 0) + (transaction.amount || transaction.price || 0);
-          await writeDB('users.json', users);
-        }
-        transaction.status = 'done';
-        transaction.paidAt = new Date().toISOString();
-        await writeDB('transactions.json', transactions);
-        return res.json({ success: true, status: 'done', type: 'deposit', balance: u?.balance || 0 });
-      }
-
-      const products = readDB('products.json');
-      const product = products.find(p => p.id === transaction.productId);
-      let key = null;
-      let outOfStock = false;
-
-      if (product?.keys?.length > 0) {
-        const days = transaction.selectedDays;
-        // Cari key duration-specific dulu (format KEY:DAYS dari deem)
-        if (days) {
-          const idx = product.keys.findIndex(k => {
-            const parts = k.split(':');
-            return parts.length > 1 && parseInt(parts[parts.length - 1]) === days;
-          });
-          if (idx !== -1) { key = product.keys.splice(idx, 1)[0].split(':')[0]; }
-        }
-        // Fallback: ambil generic key (tanpa colon)
-        if (!key) {
-          const idx = product.keys.findIndex(k => !k.includes(':'));
-          if (idx !== -1) key = product.keys.splice(idx, 1)[0];
-          else key = product.keys.shift(); // terakhir: ambil apa saja
-        }
-      }
-
-      if (key) {
-        product.sold = (product.sold || 0) + 1;
-        await writeDB('products.json', products);
-      } else {
-        // Stok habis — jangan kirim key palsu. Tandai transaksi & beri tahu admin via WA.
-        outOfStock = true;
-      }
-
-      transaction.status = 'done';
-      transaction.key = key;
-      transaction.outOfStock = outOfStock;
-      transaction.paidAt = new Date().toISOString();
+    if (verdict === 'expired') {
+      transaction.status = 'expired';
       await writeDB('transactions.json', transactions);
-
-      if (outOfStock) {
-        const waMsg = `⚠️ STOK HABIS - Pesanan butuh diproses manual!\n\n` +
-          `Order: ${transaction.code}\n` +
-          `Produk: ${transaction.productName}\n` +
-          `Customer: ${transaction.customerName} (${transaction.wa || '-'})\n` +
-          `Total: Rp ${Number(transaction.price).toLocaleString('id-ID')}\n\n` +
-          `Pembayaran sudah masuk tapi stok key kosong. Segera tambah stok & kirim key manual ke pembeli.`;
-        sendWhatsAppNotif(settings.contact?.whatsapp, waMsg, settings).catch(() => {});
-      }
-
-      const notifs = readDB('notifications.json');
-      const buyer = readDB('users.json').find(u => u.id === transaction.userId);
-      notifs.unshift({ id: uuidv4(), type: 'purchase', buyerName: transaction.customerName,
-        buyerPhoto: buyer?.photo || null, productName: transaction.productName,
-        price: transaction.price, time: transaction.paidAt, timeStr: formatDate(new Date(transaction.paidAt)) });
-      await writeDB('notifications.json', notifs.slice(0, 50));
-
-      return res.json({ success: true, status: 'done', key, code: transaction.code, outOfStock });
+      return res.json({ success: true, status: 'expired' });
     }
-
+    if (verdict === 'paid') {
+      return res.json(await fulfillPaid(refId, settings));
+    }
     res.json({ success: true, status: transaction.status });
   } catch (error) {
     console.error('[check-payment] error:', error.message);
@@ -1875,6 +1851,54 @@ app.get('/check-payment/:refId', requireAuth, async (req, res) => {
     processingOrders.delete(refId);
   }
 });
+
+// ── Webhook Pakasir v2 ─────────────────────────────────────────────
+// Set "Webhook URL" di dashboard project Pakasir ke:
+//   https://DOMAIN-KAMU/api/webhooks/pakasir
+// Header X-Secret dicocokkan dengan secret di Admin → Setting (jika diisi).
+// Payload TIDAK dipercaya begitu saja: status dicek ulang ke API transaction-status
+// (sumber kebenaran) dan nominal harus sama dengan transaksi kita.
+// Selalu balas 200 untuk payload yang valid-tapi-diabaikan supaya Pakasir tidak retry;
+// balas 5xx hanya kalau verifikasi gagal sementara (agar dicoba lagi).
+const pakasirWebhook = async (req, res) => {
+  try {
+    const settings = await readFresh('settings.json');
+    const cfg = getPakasirCfg(settings);
+    if (cfg.webhookSecret && !safeEqual(req.get('X-Secret') || '', cfg.webhookSecret)) {
+      return res.status(401).json({ success: false, message: 'Invalid secret' });
+    }
+    const b = req.body || {};
+    const orderId = String(b.order_id || '');
+    if (!orderId || String(b.status || '').toLowerCase() !== 'completed') {
+      return res.json({ success: true, ignored: true });
+    }
+
+    const transactions = await readFresh('transactions.json');
+    const t = transactions.find(x => x.orderId === orderId);
+    if (!t) return res.json({ success: true, ignored: true });
+    if (t.status === 'done') return res.json({ success: true, already: true });
+    if (Number(b.amount) !== Number(t.price)) {
+      console.error(`[pakasir-webhook] Nominal tidak cocok ${orderId}: webhook=${b.amount} kita=${t.price}`);
+      return res.json({ success: true, ignored: true });
+    }
+    if (processingOrders.has(t.id)) return res.json({ success: true, processing: true });
+
+    processingOrders.add(t.id);
+    try {
+      const verdict = await verifyPakasirPaid(t, settings, b.txn_id || t.pakasirTxnId);
+      if (verdict !== 'paid') return res.json({ success: true, ignored: true });
+      await fulfillPaid(t.id, settings);
+    } finally {
+      processingOrders.delete(t.id);
+    }
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[pakasir-webhook] error:', e.message);
+    res.status(500).json({ success: false });
+  }
+};
+app.post('/api/webhooks/pakasir', pakasirWebhook);
+app.post('/pakasir-webhook', pakasirWebhook);
 
 app.get('/invoice', (req, res) => {
   if (!checkInvoiceRateLimit(req.ip)) {
@@ -1975,22 +1999,8 @@ app.get('/admin', requireAdmin, async (req, res) => {
   });
 });
 
-// Helper: parse pricingOptions
-function parsePricingOptions(days, prices, resellerPrices) {
-  const da = Array.isArray(days) ? days : (days ? [days] : []);
-  const pa = Array.isArray(prices) ? prices : (prices ? [prices] : []);
-  const rpa = Array.isArray(resellerPrices) ? resellerPrices : (resellerPrices ? [resellerPrices] : []);
-  const opts = []; const seen = new Set();
-  for (let i = 0; i < da.length; i++) {
-    const d = parseInt(da[i]), p = parseInt(pa[i]);
-    if (d > 0 && p >= 0 && !seen.has(d)) {
-      seen.add(d);
-      const rp = rpa[i] !== undefined && rpa[i] !== '' ? parseInt(rpa[i]) : null;
-      opts.push({ days: d, price: p, reseller_price: (rp !== null && !isNaN(rp) && rp >= 0) ? rp : null });
-    }
-  }
-  return opts.sort((a, b) => a.days - b.days);
-}
+// Helper: parse pricingOptions (hari + jam) — lihat duration.js
+const parsePricingOptions = dur.parsePricingOptions;
 
 // Helper: validasi URL gambar (cegah XSS via javascript:/data: protocol)
 const isValidImageUrl = (url) => {
@@ -2006,11 +2016,11 @@ app.post('/admin/product/add', requireAdmin, (req, res, next) => {
   });
 }, async (req, res) => {
   try {
-    const {name,category,description,imageUrl:imgUrl,pricingDays,pricingPrices,pricingResellerPrices,keys,status}=req.body;
+    const {name,category,description,imageUrl:imgUrl,pricingDays,pricingPrices,pricingResellerPrices,pricingUnits,keys,status}=req.body;
     if(!name)return res.json({success:false,message:'Nama produk wajib diisi'});
     if(imgUrl && !isValidImageUrl(imgUrl)) return res.json({success:false,message:'URL gambar tidak valid'});
     const products=await readFresh('products.json');
-    const pricingOptions=parsePricingOptions(pricingDays,pricingPrices,pricingResellerPrices);
+    const pricingOptions=parsePricingOptions(pricingDays,pricingPrices,pricingResellerPrices,pricingUnits);
     if(!pricingOptions.length)return res.json({success:false,message:'Tambahkan minimal 1 opsi harga'});
     const keyArray=keys?keys.split('\n').map(k=>k.trim()).filter(k=>k):[];
     let image = imgUrl?.trim() || '';
@@ -2024,7 +2034,7 @@ app.post('/admin/product/add', requireAdmin, (req, res, next) => {
       }
     }
     if (!image) image = '/images/placeholder.jpg';
-    const items=pricingOptions.map(o=>({l:`${name.toUpperCase()} ${o.days} DAYS`,p:o.price,reseller_price:o.reseller_price}));
+    const items=pricingOptions.map(o=>({l:dur.makeLabel(name,o.days,o.unit),p:o.price,reseller_price:o.reseller_price}));
     const newProduct={id:uuidv4(),name,category:category||'freefire',description:description||'',image,pricingOptions,items,status:status==='inactive'?'inactive':'active',keys:keyArray,sold:0,createdAt:new Date().toISOString()};
     products.push(newProduct);await writeDB('products.json',products);
     res.json({success:true,product:newProduct});
@@ -2038,14 +2048,14 @@ app.post('/admin/product/edit/:id', requireAdmin, (req, res, next) => {
   });
 }, async (req, res) => {
   try {
-    const {name,category,description,imageUrl:imgUrl,pricingDays,pricingPrices,pricingResellerPrices,keys,keysMode,status}=req.body;
+    const {name,category,description,imageUrl:imgUrl,pricingDays,pricingPrices,pricingResellerPrices,pricingUnits,keys,keysMode,status}=req.body;
     const products=await readFresh('products.json');
     const product=products.find(p=>p.id===req.params.id);
     if(!product)return res.json({success:false,message:'Produk tidak ditemukan'});
     if(imgUrl && !isValidImageUrl(imgUrl)) return res.json({success:false,message:'URL gambar tidak valid'});
     if(name)product.name=name;if(category)product.category=category;
     if(description!==undefined)product.description=description;if(status)product.status=status;
-    if(pricingDays){const opts=parsePricingOptions(pricingDays,pricingPrices,pricingResellerPrices);if(opts.length){product.pricingOptions=opts;product.items=opts.map(o=>({l:`${product.name.toUpperCase()} ${o.days} DAYS`,p:o.price,reseller_price:o.reseller_price}));}}
+    if(pricingDays){const opts=parsePricingOptions(pricingDays,pricingPrices,pricingResellerPrices,pricingUnits);if(opts.length){product.pricingOptions=opts;product.items=opts.map(o=>({l:dur.makeLabel(product.name,o.days,o.unit),p:o.price,reseller_price:o.reseller_price}));}}
     if(keys!==undefined&&keys!==null){const nk=keys.split('\n').map(k=>k.trim()).filter(k=>k);product.keys=keysMode==='append'?[...(product.keys||[]),...nk]:nk;}
     if (req.file) {
       if (!isVercel) product.image=`/uploads/products/${req.file.filename}`;
@@ -2200,13 +2210,16 @@ app.post('/admin/settings/update', requireAdmin, async (req, res) => {
 app.post('/admin/settings/pakasir', requireAdmin, async (req, res) => {
   try {
     const settings = await readFresh('settings.json');
-    const { apiKey, project, mode, apiBaseUrl, qrisMode } = req.body;
+    const { apiKey, project, mode, webhookSecret, qrisMode } = req.body;
+    const cur = settings.pakasir || {};
 
+    // v2: `project` = slug project di dashboard Pakasir. Hostname API tetap
+    // app.pakasir.com (field apiBaseUrl lama sudah tidak dipakai).
     settings.pakasir = {
-      apiKey: apiKey !== undefined ? apiKey : (settings.pakasir?.apiKey || ''),
-      project: project !== undefined ? project : (settings.pakasir?.project || ''),
-      mode: mode || settings.pakasir?.mode || 'production',
-      apiBaseUrl: apiBaseUrl !== undefined ? apiBaseUrl : (settings.pakasir?.apiBaseUrl || 'api.pakasir.com')
+      apiKey: apiKey !== undefined ? String(apiKey).trim() : (cur.apiKey || ''),
+      project: project !== undefined ? String(project).trim() : (cur.project || ''),
+      mode: (mode === 'sandbox' || mode === 'production') ? mode : (cur.mode || 'production'),
+      webhookSecret: webhookSecret !== undefined ? String(webhookSecret).trim() : (cur.webhookSecret || '')
     };
 
     if (qrisMode) settings.qrisMode = qrisMode;
@@ -2220,12 +2233,12 @@ app.post('/admin/settings/pakasir', requireAdmin, async (req, res) => {
 
 app.post('/admin/qris/test', requireAdmin, async (req, res) => {
   try {
-    const { apiKey, project, apiBaseUrl } = req.body;
-    const hostname = apiBaseUrl || 'api.pakasir.com';
-    const testSettings = { pakasir: { apiKey, project, apiBaseUrl: hostname } };
+    const { apiKey, project } = req.body;
+    const testSettings = { pakasir: { apiKey, project } };
     try {
-      await createQRISPayment('test-' + Date.now(), 1000, testSettings);
-      res.json({ success: true });
+      // Rp 1.000 >= minimum QRIS v2 (Rp 500). v2 find-or-create, order_id unik tiap test.
+      const r = await createQRISPayment('test-' + Date.now(), 1000, testSettings);
+      res.json({ success: true, txn_id: r.txn_id });
     } catch (e) {
       res.json({ success: false, message: e.message });
     }
@@ -2378,24 +2391,11 @@ app.post('/admin/transaction/confirm/:id', requireAdmin, async (req, res) => {
       return res.json({ success: true, type: 'deposit', balance: u?.balance || 0 });
     }
 
-    // Transaksi produk biasa: ambil key
-    const products = readDB('products.json');
+    // Transaksi produk biasa: ambil key sesuai durasi (hari/jam)
+    const products = await readFresh('products.json');
     const product = products.find(p => p.id === transaction.productId);
-    let key = null;
-    if (product?.keys?.length > 0) {
-      const days = transaction.selectedDays;
-      if (days) {
-        const idx = product.keys.findIndex(k => {
-          const parts = k.split(':');
-          return parts.length > 1 && parseInt(parts[parts.length - 1]) === days;
-        });
-        if (idx !== -1) { key = product.keys.splice(idx, 1)[0].split(':')[0]; }
-      }
-      if (!key) {
-        const idx = product.keys.findIndex(k => !k.includes(':'));
-        if (idx !== -1) key = product.keys.splice(idx, 1)[0];
-        else key = product.keys.shift();
-      }
+    const key = product ? dur.takeKey(product.keys, transaction.selectedDays, transaction.selectedUnit) : null;
+    if (key) {
       product.sold = (product.sold || 0) + 1;
       await writeDB('products.json', products);
     }
@@ -2843,15 +2843,18 @@ app.post('/admin/product/:id', requireAdmin, async (req, res) => {
             ? null : parseInt(o.reseller_price);
           return {
             days: parseInt(o.days),
+            unit: dur.normUnit(o.unit),
             price: parseInt(o.price),
             reseller_price: (rp !== null && !isNaN(rp) && rp >= 0) ? rp : null
           };
         })
         // price > 0 wajib — price 0 hampir selalu berarti input kosong/tak sengaja, bukan produk gratis
-        .filter(o => o.days > 0 && !isNaN(o.price) && o.price > 0);
+        .filter(o => o.days > 0 && !isNaN(o.price) && o.price > 0)
+        // buang duplikat (durasi + unit sama)
+        .filter((o, i, arr) => arr.findIndex(x => x.days === o.days && x.unit === o.unit) === i);
       if (validOpts.length > 0) {
         p.pricingOptions = validOpts;
-        p.items = validOpts.map(o => ({ l: `${(p.name||'PRODUK').toUpperCase()} ${o.days} DAYS`, p: o.price, reseller_price: o.reseller_price }));
+        p.items = validOpts.map(o => ({ l: dur.makeLabel(p.name, o.days, o.unit), p: o.price, reseller_price: o.reseller_price }));
       } else {
         return res.json({ success: false, message: 'Harga paket tidak valid (harga harus lebih dari 0)' });
       }
@@ -3028,6 +3031,281 @@ app.post('/admin/keyspool/delete/:id', requireAdmin, async (req, res) => {
     await writeDB('keyspool.json', keyspool);
     res.json({ success: true });
   } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════
+// RESTOCK KEY via YouduStore API  (lihat youdustore.js + api-1.json)
+// Alur: admin petakan paket produk → kode produk supplier, klik "Restock N key".
+// Server memesan N order ke supplier (saldo supplier terpotong), lalu serial_number
+// tiap order yang sukses otomatis ditambahkan ke stok key paket tersebut
+// (format KEY:7 = 7 hari, KEY:12h = 12 jam). Status diperbarui lewat callback
+// supplier dan/atau tombol "Cek Status".
+// ═══════════════════════════════════════════════════════════
+const RESTOCK_MAX_BATCH = 10;           // batas order per klik (aman untuk timeout serverless)
+const restockBusy = new Set();          // lock: 'order' (1 batch sekaligus) & id restock saat refresh
+let supplierProductsCache = { at: 0, data: [] };
+
+const maskSecret = (v) => { v = String(v || ''); return v ? `••••${v.slice(-4)}` : ''; };
+const publicBaseUrl = (req) => (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+
+async function ensureYouduCallbackSecret() {
+  const settings = await readFresh('settings.json');
+  settings.youdu = settings.youdu || { token: '', apiKey: '', sandbox: false, map: {} };
+  if (!settings.youdu.callbackSecret) {
+    settings.youdu.callbackSecret = crypto.randomBytes(16).toString('hex');
+    await writeDB('settings.json', settings);
+  }
+  return settings;
+}
+
+const isFinalOrder = (o) => ['success', 'failed', 'sandbox'].includes(o.status);
+
+// Perbarui status order yang belum final ke supplier, lalu masukkan serial_number
+// yang sukses ke stok produk. Idempotent (flag keyAdded per order).
+async function refreshRestock(restockId, { skipIfOrdering = false } = {}) {
+  // Callback supplier yang datang saat batch order masih berjalan diabaikan (batch
+  // selalu diakhiri refresh sendiri) supaya dua penulis tidak saling menimpa restocks.json
+  if (skipIfOrdering && restockBusy.has('order')) return null;
+  if (restockBusy.has(restockId)) return null;
+  restockBusy.add(restockId);
+  try {
+    const settings = await readFresh('settings.json');
+    const cfg = youdu.cfgFrom(settings);
+    const restocks = await readFresh('restocks.json');
+    const rec = restocks.find(r => r.id === restockId);
+    if (!rec) return null;
+
+    let changed = false;
+    for (const o of rec.orders) {
+      if (isFinalOrder(o) && (o.status !== 'success' || o.keyAdded)) continue;
+      if (!isFinalOrder(o)) {
+        try {
+          const d = await youdu.checkStatus(cfg, o.invoice || o.reference);
+          const st = youdu.normalizeStatus(d.transaction_status);
+          if (d.invoice && !o.invoice) o.invoice = d.invoice;
+          if (d.serial_number) o.serial = String(d.serial_number).trim();
+          if (d.note) o.note = String(d.note).slice(0, 200);
+          o.status = st;
+          changed = true;
+        } catch (e) {
+          // Order tak ditemukan di supplier (sering terjadi saat request sebelumnya timeout) → aman dianggap gagal
+          if (e.status === 404 && !o.invoice) { o.status = 'failed'; o.error = 'Order tidak ditemukan di supplier'; changed = true; }
+          else o.lastCheckError = e.message;
+        }
+      }
+    }
+
+    // Tambahkan key sukses ke stok produk
+    const pending = rec.orders.filter(o => o.status === 'success' && o.serial && !o.keyAdded);
+    if (pending.length && !rec.sandbox) {
+      const products = await readFresh('products.json');
+      const product = products.find(p => p.id === rec.productId);
+      if (product) {
+        product.keys = product.keys || [];
+        const tag = rec.value ? dur.tagFor(rec.value, rec.unit) : '';
+        for (const o of pending) {
+          const code = String(o.serial).replace(/[\r\n]+/g, ' ').trim();
+          if (!code) continue;
+          const entry = tag ? `${code}:${tag}` : code;
+          if (!product.keys.includes(entry)) product.keys.push(entry);
+          o.keyAdded = true;
+        }
+        await writeDB('products.json', products);
+        changed = true;
+      } else {
+        pending.forEach(o => { o.error = 'Produk sudah dihapus — key tidak ditambahkan'; });
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      rec.updatedAt = new Date().toISOString();
+      await writeDB('restocks.json', restocks);
+    }
+    return rec;
+  } finally {
+    restockBusy.delete(restockId);
+  }
+}
+
+// Data panel restock
+app.get('/admin/restock/data', requireAdmin, async (req, res) => {
+  try {
+    const settings = await ensureYouduCallbackSecret();
+    const y = settings.youdu || {};
+    const cfg = youdu.cfgFrom(settings);
+    const products = await readFresh('products.json');
+    const restocks = (await readFresh('restocks.json')).slice(-40).reverse();
+    res.json({
+      success: true,
+      configured: !!(cfg.token && cfg.apiKey),
+      tokenHint: maskSecret(cfg.token),
+      apiKeyHint: maskSecret(cfg.apiKey),
+      sandbox: !!y.sandbox,
+      callbackUrl: `${publicBaseUrl(req)}/api/youdu/callback/${y.callbackSecret}`,
+      maxBatch: RESTOCK_MAX_BATCH,
+      map: y.map || {},
+      products: products.map(p => ({
+        id: p.id, name: p.name,
+        packages: (p.pricingOptions || []).map(o => {
+          const unit = dur.normUnit(o.unit);
+          return { value: o.days, unit, label: dur.human(o.days, unit), tag: dur.tagFor(o.days, unit),
+                   stock: dur.stockFor(p.keys, o.days, unit) };
+        })
+      })),
+      restocks
+    });
+  } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/admin/restock/settings', requireAdmin, async (req, res) => {
+  try {
+    const settings = await ensureYouduCallbackSecret();
+    const { token, apiKey, sandbox } = req.body;
+    settings.youdu = settings.youdu || {};
+    // Field kosong = jangan ubah (nilai asli tidak pernah dikirim balik ke browser)
+    if (token && String(token).trim()) settings.youdu.token = String(token).trim().replace(/^Bearer\s+/i, '');
+    if (apiKey && String(apiKey).trim()) settings.youdu.apiKey = String(apiKey).trim();
+    if (sandbox !== undefined) settings.youdu.sandbox = (sandbox === true || sandbox === 'true' || sandbox === 'on');
+    await writeDB('settings.json', settings);
+    res.json({ success: true });
+  } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/admin/restock/test', requireAdmin, async (req, res) => {
+  try {
+    const settings = await readFresh('settings.json');
+    const b = await youdu.getBalance(youdu.cfgFrom(settings));
+    res.json({ success: true, name: b.name, membership: b.membership, balance: Number(b.balance) || 0 });
+  } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.get('/admin/restock/supplier-products', requireAdmin, async (req, res) => {
+  try {
+    if (Date.now() - supplierProductsCache.at > 60000 || req.query.refresh) {
+      const settings = await readFresh('settings.json');
+      supplierProductsCache = { at: Date.now(), data: await youdu.getProducts(youdu.cfgFrom(settings)) };
+    }
+    res.json({ success: true, data: supplierProductsCache.data });
+  } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+// Simpan pemetaan paket produk → kode produk supplier
+app.post('/admin/restock/map', requireAdmin, async (req, res) => {
+  try {
+    const { productId, tag, code, data } = req.body;
+    if (!productId || !tag) return res.json({ success: false, message: 'Data tidak lengkap' });
+    const products = await readFresh('products.json');
+    if (!products.find(p => p.id === productId)) return res.json({ success: false, message: 'Produk tidak ditemukan' });
+    const settings = await readFresh('settings.json');
+    settings.youdu = settings.youdu || { map: {} };
+    settings.youdu.map = settings.youdu.map || {};
+    const c = String(code || '').trim();
+    if (!c) {
+      if (settings.youdu.map[productId]) delete settings.youdu.map[productId][tag];
+    } else {
+      settings.youdu.map[productId] = settings.youdu.map[productId] || {};
+      settings.youdu.map[productId][tag] = { code: c, data: String(data || '-').trim() || '-' };
+    }
+    await writeDB('settings.json', settings);
+    res.json({ success: true, map: settings.youdu.map });
+  } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+// Pesan N key ke supplier
+app.post('/admin/restock/order', requireAdmin, async (req, res) => {
+  if (restockBusy.has('order')) return res.json({ success: false, message: 'Restock lain masih berjalan, tunggu sebentar...' });
+  restockBusy.add('order');
+  try {
+    const { productId, value, unit, qty } = req.body;
+    const n = Math.min(Math.max(parseInt(qty, 10) || 0, 0), RESTOCK_MAX_BATCH);
+    if (n < 1) return res.json({ success: false, message: `Jumlah restock 1–${RESTOCK_MAX_BATCH}` });
+
+    const settings = await ensureYouduCallbackSecret();
+    const cfg = youdu.cfgFrom(settings);
+    const products = await readFresh('products.json');
+    const product = products.find(p => p.id === productId);
+    if (!product) return res.json({ success: false, message: 'Produk tidak ditemukan' });
+
+    const v = parseInt(value, 10), u = dur.normUnit(unit);
+    if (!(v > 0) || !(product.pricingOptions || []).some(o => parseInt(o.days, 10) === v && dur.normUnit(o.unit) === u)) {
+      return res.json({ success: false, message: 'Paket produk tidak ditemukan' });
+    }
+    const mapping = settings.youdu?.map?.[productId]?.[dur.tagFor(v, u)];
+    if (!mapping?.code) return res.json({ success: false, message: 'Paket ini belum dipetakan ke produk supplier' });
+
+    const callbackUrl = `${publicBaseUrl(req)}/api/youdu/callback/${settings.youdu.callbackSecret}`;
+    const rec = {
+      id: uuidv4(), productId, productName: product.name, value: v, unit: u,
+      supplierCode: mapping.code, qty: n, sandbox: !!cfg.sandbox, orders: [],
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    };
+    const restocks = await readFresh('restocks.json');
+    restocks.push(rec);
+    if (restocks.length > 300) restocks.splice(0, restocks.length - 300);
+    await writeDB('restocks.json', restocks);
+
+    let stopMsg = null;
+    const base = Date.now().toString(36);
+    for (let i = 1; i <= n; i++) {
+      const o = { reference: `RS-${base}-${i}`, invoice: null, status: 'processing', serial: '', note: '', keyAdded: false };
+      rec.orders.push(o);
+      try {
+        const d = await youdu.placeOrder(cfg, {
+          code: mapping.code, data: mapping.data || '-', referenceNumber: o.reference,
+          telp: (settings.contact?.whatsapp || '').replace(/\D/g, '') || undefined,
+          callbackUrl
+        });
+        o.invoice = d.invoice_number || null;
+      } catch (e) {
+        o.error = e.message;
+        if (e.definitive) { o.status = 'failed'; stopMsg = e.message; }
+        else { o.status = 'processing'; stopMsg = `${e.message} — status order terakhir belum pasti, klik "Cek Status"`; }
+        break;   // saldo habis / token salah / timeout → jangan lanjut memesan
+      }
+      await writeDB('restocks.json', restocks);
+    }
+    await writeDB('restocks.json', restocks);
+
+    // Cek status sekali (order biasanya langsung diproses otomatis)
+    const result = await refreshRestock(rec.id) || rec;
+    res.json({ success: true, restock: result, placed: result.orders.filter(o => o.invoice).length, requested: n, warning: stopMsg || undefined });
+  } catch (e) {
+    console.error('[restock/order] error:', e.message);
+    res.json({ success: false, message: e.message });
+  } finally {
+    restockBusy.delete('order');
+  }
+});
+
+app.post('/admin/restock/check/:id', requireAdmin, async (req, res) => {
+  try {
+    const rec = await refreshRestock(req.params.id);
+    if (!rec) return res.json({ success: false, message: 'Sedang diproses atau restock tidak ditemukan' });
+    res.json({ success: true, restock: rec });
+  } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+// Callback supplier (POST ke URL kita saat status order berubah).
+// Secret ada di path URL karena dokumentasi supplier tidak menyediakan signature.
+// Isi body TIDAK dipercaya: kita hanya memakainya sebagai pemicu, lalu status
+// dicek ulang langsung ke API supplier.
+app.post('/api/youdu/callback/:secret', async (req, res) => {
+  try {
+    const settings = await readFresh('settings.json');
+    const secret = settings.youdu?.callbackSecret;
+    if (!secret || !safeEqual(req.params.secret, secret)) return res.status(404).send('Not found');
+    const ref = String(req.body?.reference || '');
+    if (ref) {
+      const restocks = await readFresh('restocks.json');
+      const rec = restocks.find(r => r.orders.some(o => o.invoice === ref || o.reference === ref));
+      if (rec) await refreshRestock(rec.id, { skipIfOrdering: true });
+    }
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[youdu-callback] error:', e.message);
+    res.status(500).json({ success: false });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════
