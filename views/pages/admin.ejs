@@ -1695,6 +1695,7 @@ function rsSupplierInfo(code) {
     const p = rsSupplier.find(x => x.code === code);
     return p ? `${p.serviceName} · ${rsRp(p.price)}` : '';
 }
+const rsCand = {};   // id → kandidat produk supplier saat input ambigu / tidak ketemu
 
 function rsRenderPackages() {
     const box = document.getElementById('rsPackages');
@@ -1715,7 +1716,12 @@ function rsRenderPackages() {
                     <input type="text" id="rsData-${rsEsc(id)}" value="${rsEsc(m.data || '')}" class="hm-input text-xs" style="width:90px" placeholder="data (-)" title="Isi field 'data' order supplier. Produk key biasanya tidak butuh; default '-'">
                     <button onclick="rsSaveMap('${rsEsc(p.id)}','${rsEsc(pk.tag)}')" class="px-2.5 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-300 text-[11px] font-bold">Simpan</button>
                 </div>
-                <div class="text-[10px] text-zinc-500 mb-1.5">${m.code ? rsEsc(rsSupplierInfo(m.code)) || 'Terpetakan' : 'Belum dipetakan'}</div>
+                <div class="text-[10px] mb-1.5 ${m.code && rsSupplier.length && !rsSupplierInfo(m.code) ? 'text-red-400' : 'text-zinc-500'}">${
+                    !m.code ? 'Belum dipetakan'
+                    : rsSupplierInfo(m.code) ? '✓ ' + rsEsc(rsSupplierInfo(m.code))
+                    : rsSupplier.length ? '⚠ Kode "' + rsEsc(m.code) + '" tidak ada di YouduStore — petakan ulang (ketik nama produk, pilih dari saran)'
+                    : 'Terpetakan (klik "Muat produk supplier" untuk verifikasi)'}</div>
+                ${(rsCand[id] || []).length ? `<div class="flex flex-col gap-1 mb-1.5">${rsCand[id].map(c => `<button type="button" onclick="rsPick('${rsEsc(p.id)}','${rsEsc(pk.tag)}','${rsEsc(c.code)}')" class="text-left px-2 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/25 text-[10px] text-yellow-200">${rsEsc(c.name)} · ${rsRp(c.price)} <span class="text-zinc-500 font-mono">(${rsEsc(c.code)})</span></button>`).join('')}</div>` : ''}
                 <div class="flex gap-1.5 items-center">
                     <input type="number" id="rsQty-${rsEsc(id)}" value="5" min="1" max="${d.maxBatch}" class="hm-input text-xs" style="width:70px">
                     <button onclick="rsOrder('${rsEsc(p.id)}','${rsEsc(pk.tag)}',${pk.value},'${pk.unit}',this)" ${m.code ? '' : 'disabled style="opacity:.4"'} class="btn-primary flex-1 justify-center py-2"><iconify-icon icon="mdi:package-down"></iconify-icon> Restock key</button>
@@ -1733,8 +1739,23 @@ async function rsSaveMap(pid, tag) {
         code: document.getElementById('rsCode-' + id).value,
         data: document.getElementById('rsData-' + id).value
     });
-    if (d.success) { toast('Pemetaan disimpan', 'success'); rsState.map = d.map; rsRenderPackages(); }
-    else toast(d.message || 'Gagal menyimpan', 'error');
+    if (d.success) {
+        delete rsCand[id];
+        toast(d.resolved ? `Dipetakan ke: ${d.resolved.name}` : 'Pemetaan dihapus', 'success');
+        rsState.map = d.map; rsRenderPackages();
+    } else {
+        rsCand[id] = d.candidates || [];
+        toast(d.message || 'Gagal menyimpan', 'error');
+        const keep = {};   // jaga isi input agar tidak hilang saat render ulang
+        document.querySelectorAll('[id^="rsCode-"],[id^="rsData-"],[id^="rsQty-"]').forEach(el => keep[el.id] = el.value);
+        rsRenderPackages();
+        Object.entries(keep).forEach(([k, v]) => { const el = document.getElementById(k); if (el) el.value = v; });
+    }
+}
+
+function rsPick(pid, tag, code) {
+    document.getElementById(`rsCode-${pid}__${tag}`).value = code;
+    rsSaveMap(pid, tag);
 }
 
 async function rsOrder(pid, tag, value, unit, btn) {
