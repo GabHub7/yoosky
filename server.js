@@ -1082,7 +1082,7 @@ app.post('/reseller/join', requireAuth, async (req, res) => {
     if (!user) return res.json({ success: false, message: 'User tidak ditemukan' });
     if (user.is_reseller) return res.json({ success: false, message: 'Kamu sudah menjadi Reseller VIP!' });
 
-    const settings = readDB('settings.json');
+    const settings = await readFresh('settings.json');
     const price = settings.resellerPrice || 50000;
     const orderId = `RES-${Date.now()}`;
     const refId = uuidv4();
@@ -1136,7 +1136,7 @@ app.post('/wallet/topup', requireAuth, async (req, res) => {
     if (!user) return res.json({ success: false, message: 'User tidak ditemukan' });
     if (!user.is_reseller) return res.json({ success: false, message: 'Top up saldo khusus untuk Reseller VIP. Gabung reseller dulu yuk!' });
 
-    const settings = readDB('settings.json');
+    const settings = await readFresh('settings.json');
     const minDeposit = settings.resellerMinDeposit || 50000;
     const amount = parseInt(req.body.amount);
     if (isNaN(amount) || amount < minDeposit) {
@@ -1222,7 +1222,7 @@ app.post('/wallet/buy', requireAuth, async (req, res) => {
     let price = pkg.price;
     const selectedDays = pkg.value, selectedUnit = pkg.unit;
 
-    const settings = readDB('settings.json');
+    const settings = await readFresh('settings.json');
     // Prioritas harga: reseller_price manual per-paket → global diskon %
     if (pkg.resellerPrice != null && pkg.resellerPrice >= 0) {
       price = pkg.resellerPrice;
@@ -1825,7 +1825,7 @@ app.get('/check-payment/:refId', requireAuth, async (req, res) => {
     if (Date.now() - lastGw < 4000) return res.json({ success: true, status: 'pending' });
     gatewayCheckAt.set(refId, Date.now());
 
-    const settings = readDB('settings.json');
+    const settings = await readFresh('settings.json');
     let verdict = 'pending';
     try {
       const hadTxnId = !!transaction.pakasirTxnId;
@@ -3182,13 +3182,38 @@ app.post('/admin/restock/test', requireAdmin, async (req, res) => {
 
 app.get('/admin/restock/supplier-products', requireAdmin, async (req, res) => {
   try {
-    if (Date.now() - supplierProductsCache.at > 60000 || req.query.refresh) {
-      const settings = await readFresh('settings.json');
-      supplierProductsCache = { at: Date.now(), data: await youdu.getProducts(youdu.cfgFrom(settings)) };
-    }
-    res.json({ success: true, data: supplierProductsCache.data });
+    const settings = await readFresh('settings.json');
+    res.json({ success: true, data: await getSupplierProducts(settings, !!req.query.refresh) });
   } catch (e) { res.json({ success: false, message: e.message }); }
 });
+
+const getSupplierProducts = async (settings, force = false) => {
+  if (force || Date.now() - supplierProductsCache.at > 60000) {
+    supplierProductsCache = { at: Date.now(), data: await youdu.getProducts(youdu.cfgFrom(settings)) };
+  }
+  return supplierProductsCache.data;
+};
+
+// Ubah input admin (kode ATAU potongan nama produk) jadi kode produk supplier yang VALID.
+// Mencegah menyimpan teks bebas (mis. "aimhack") yang nanti ditolak supplier "code is invalid".
+const resolveSupplierCode = (input, list) => {
+  const q = String(input).trim().toLowerCase();
+  const byCode = list.find(p => String(p.code).toLowerCase() === q);
+  if (byCode) return { ok: true, product: byCode };
+  const tokens = q.split(/\s+/).filter(Boolean);
+  const hits = list.filter(p => {
+    const hay = `${p.code} ${p.serviceName} ${p.category || ''}`.toLowerCase();
+    return tokens.every(t => hay.includes(t));
+  });
+  if (hits.length === 1) return { ok: true, product: hits[0] };
+  const cands = (hits.length ? hits : []).slice(0, 8).map(p => ({ code: p.code, name: p.serviceName, price: p.price }));
+  return {
+    ok: false, candidates: cands,
+    message: hits.length
+      ? `"${input}" cocok dengan ${hits.length} produk supplier. Pilih salah satu kodenya.`
+      : `"${input}" tidak ditemukan di daftar produk YouduStore. Ketik nama produk lalu pilih dari saran, atau isi kode yang benar.`
+  };
+};
 
 // Simpan pemetaan paket produk → kode produk supplier
 app.post('/admin/restock/map', requireAdmin, async (req, res) => {
@@ -3201,14 +3226,21 @@ app.post('/admin/restock/map', requireAdmin, async (req, res) => {
     settings.youdu = settings.youdu || { map: {} };
     settings.youdu.map = settings.youdu.map || {};
     const c = String(code || '').trim();
+    let resolved = null;
     if (!c) {
       if (settings.youdu.map[productId]) delete settings.youdu.map[productId][tag];
     } else {
+      let list;
+      try { list = await getSupplierProducts(settings); }
+      catch (e) { return res.json({ success: false, message: 'Tidak bisa memverifikasi kode ke YouduStore: ' + e.message }); }
+      const r = resolveSupplierCode(c, list);
+      if (!r.ok) return res.json({ success: false, message: r.message, candidates: r.candidates });
+      resolved = { code: r.product.code, name: r.product.serviceName, price: r.product.price };
       settings.youdu.map[productId] = settings.youdu.map[productId] || {};
-      settings.youdu.map[productId][tag] = { code: c, data: String(data || '-').trim() || '-' };
+      settings.youdu.map[productId][tag] = { code: r.product.code, data: String(data || '-').trim() || '-' };
     }
     await writeDB('settings.json', settings);
-    res.json({ success: true, map: settings.youdu.map });
+    res.json({ success: true, map: settings.youdu.map, resolved });
   } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
@@ -3259,7 +3291,12 @@ app.post('/admin/restock/order', requireAdmin, async (req, res) => {
         o.invoice = d.invoice_number || null;
       } catch (e) {
         o.error = e.message;
-        if (e.definitive) { o.status = 'failed'; stopMsg = e.message; }
+        if (e.definitive) {
+          o.status = 'failed';
+          stopMsg = /code.*invalid|invalid.*code/i.test(e.message)
+            ? `${e.message} — kode produk supplier salah, petakan ulang paket ini (pilih dari saran produk supplier)`
+            : e.message;
+        }
         else { o.status = 'processing'; stopMsg = `${e.message} — status order terakhir belum pasti, klik "Cek Status"`; }
         break;   // saldo habis / token salah / timeout → jangan lanjut memesan
       }
